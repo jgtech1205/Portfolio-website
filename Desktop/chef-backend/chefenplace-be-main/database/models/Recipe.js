@@ -12,6 +12,12 @@ const recipeSchema = new mongoose.Schema(
       ref: "Panel",
       required: true,
     },
+    headChefId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true, // Index for efficient queries
+    },
     image: {
       url: String,
       publicId: String,

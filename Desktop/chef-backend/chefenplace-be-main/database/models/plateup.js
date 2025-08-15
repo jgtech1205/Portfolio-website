@@ -1,11 +1,17 @@
 const mongoose = require("mongoose")
 
-const plateUpsSchema = new mongoose.Schema(
+const plateupSchema = new mongoose.Schema(
   {
-    name: {
+    title: {
       type: String,
       required: true,
       trim: true,
+    },
+    headChefId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true, // Index for efficient queries
     },
     image: {
       url: String,
@@ -31,7 +37,7 @@ const plateUpsSchema = new mongoose.Schema(
 )
 
 // Update folder plateup count on save
-plateUpsSchema.post('save', async function () {
+plateupSchema.post('save', async function () {
   if (this.folder) {
     const Folder = mongoose.model('PlateupFolder');
     const count = await mongoose.model('PlateUp').countDocuments({
@@ -42,7 +48,7 @@ plateUpsSchema.post('save', async function () {
 });
 
 // Update folder plateup count on remove
-plateUpsSchema.post('remove', async function () {
+plateupSchema.post('remove', async function () {
   if (this.folder) {
     const Folder = mongoose.model('PlateupFolder');
     const count = await mongoose.model('PlateUp').countDocuments({
@@ -52,4 +58,4 @@ plateUpsSchema.post('remove', async function () {
   }
 });
 
-module.exports = mongoose.model("PlateUp", plateUpsSchema)
+module.exports = mongoose.model("PlateUp", plateupSchema)

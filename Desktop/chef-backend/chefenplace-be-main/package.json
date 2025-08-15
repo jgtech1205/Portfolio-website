@@ -8,7 +8,15 @@
     "dev": "nodemon server.js",
     "test": "jest --passWithNoTests",
     "deploy": "./scripts/deploy.sh",
-    "vercel-build": "echo 'Build completed'"
+    "vercel-build": "echo 'Build completed'",
+    "migrate:backup": "node scripts/backupUsers.js backup",
+    "migrate:dry-run": "node scripts/migrateUsers.js dry-run",
+    "migrate:run": "node scripts/migrateUsers.js migrate",
+    "migrate:validate": "node scripts/migrateUsers.js validate",
+    "migrate:rollback": "node scripts/migrateUsers.js rollback",
+    "backup:list": "node scripts/backupUsers.js list",
+    "migrate:test": "node scripts/testMigration.js test",
+    "migrate:test-cleanup": "node scripts/testMigration.js cleanup"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

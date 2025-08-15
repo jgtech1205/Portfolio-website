@@ -11,8 +11,15 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    headChefId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true, // Index for efficient queries
+    },
     type: {
       type: String,
+      enum: ["info", "warning", "error", "success"],
       default: "info",
     },
     recipients: [

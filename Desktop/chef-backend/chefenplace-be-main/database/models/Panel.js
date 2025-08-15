@@ -7,6 +7,12 @@ const panelSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    headChefId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true, // Index for efficient queries
+    },
     image: {
       url: String,
       publicId: String,

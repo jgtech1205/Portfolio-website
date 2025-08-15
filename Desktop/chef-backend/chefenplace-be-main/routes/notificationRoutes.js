@@ -1,7 +1,7 @@
 const express = require("express")
 const { body } = require("express-validator")
 const notificationController = require("../controllers/notificationController")
-const auth = require("../middlewares/auth")
+const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
 const checkPermission = require("../middlewares/checkPermission")
 
 const router = express.Router()

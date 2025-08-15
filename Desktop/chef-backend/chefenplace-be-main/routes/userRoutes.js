@@ -1,7 +1,7 @@
 const express = require("express")
 const { body } = require("express-validator")
 const userController = require("../controllers/userController")
-const auth = require("../middlewares/auth")
+const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
 const checkPermission = require("../middlewares/checkPermission")
 const upload = require("../middlewares/upload")
 
@@ -99,9 +99,18 @@ router.put("/preferences", userController.updatePreferences)
  *     tags: [Users]
  *     responses:
  *       200:
- *         description: Team list
+ *         description: Team members list
  */
 router.get("/team", checkPermission("canManageTeam"), userController.getTeamMembers)
+
+// Simple team endpoint for testing (no auth required)
+router.get("/team/public", (req, res) => {
+  res.json({
+    success: true,
+    message: "Team endpoint is working",
+    data: []
+  });
+});
 /**
  * @swagger
  * /api/users/team/invite:
@@ -115,7 +124,12 @@ router.get("/team", checkPermission("canManageTeam"), userController.getTeamMemb
 router.post(
   "/team/invite",
   checkPermission("canManageTeam"),
-  [body("email").isEmail().normalizeEmail(), body("role").isIn(["head-chef", "user"])],
+  [
+    body("email").isEmail().normalizeEmail(), 
+    body("firstName").trim().isLength({ min: 1 }),
+    body("lastName").trim().isLength({ min: 1 }),
+    body("role").isIn(["head-chef", "user"])
+  ],
   userController.inviteTeamMember,
 )
 /**
@@ -162,7 +176,74 @@ router.delete("/team/:id", checkPermission("canManageTeam"), userController.remo
 router.get("/invite-link", checkPermission("canManageTeam"), userController.generateInviteLink)
 
 // Pending chef management
+/**
+ * @swagger
+ * /api/users/pending-chefs:
+ *   get:
+ *     summary: Get pending team member requests
+ *     tags: [Users]
+ *     responses:
+ *       200:
+ *         description: List of pending team members
+ */
 router.get("/pending-chefs", checkPermission("canManageTeam"), userController.listPendingChefs)
+
+/**
+ * @swagger
+ * /api/users/pending-chefs/{id}:
+ *   put:
+ *     summary: Approve or reject pending team member
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Team member ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [approved, rejected]
+ *                 description: New status for the team member
+ *     responses:
+ *       200:
+ *         description: Team member status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *       400:
+ *         description: Invalid status provided
+ *       404:
+ *         description: Team member not found
+ *       500:
+ *         description: Server error
+ */
 router.put("/pending-chefs/:id", checkPermission("canManageTeam"), userController.updatePendingChef)
 
 // Utility endpoints

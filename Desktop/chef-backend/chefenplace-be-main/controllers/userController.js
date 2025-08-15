@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const User = require('../database/models/User');
+const Notification = require('../database/models/Notification');
 const { uploadImage, deleteImage } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
 
@@ -209,7 +210,7 @@ const userController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, role, name } = req.body;
+      const { email, firstName, lastName, role } = req.body;
 
       // Check if user already exists
       const existingUser = await User.findOne({ email });
@@ -224,7 +225,8 @@ const userController = {
       const newUser = new User({
         email,
         password: tempPassword,
-        name: name || email.split('@')[0],
+        firstName,
+        lastName,
         role,
       });
 
@@ -336,7 +338,7 @@ const userController = {
   // List pending chefs for head chef
   async listPendingChefs(req, res) {
     try {
-      const chefs = await User.find({ headChef: req.user.id, role: 'user', status: 'pending' }).select('name status');
+      const chefs = await User.find({ headChefId: req.user.id, role: 'user', status: 'pending' }).select('name status');
       res.json({ success: true, data: chefs });
     } catch (error) {
       console.error('List pending chefs error:', error);
@@ -348,19 +350,75 @@ const userController = {
   async updatePendingChef(req, res) {
     try {
       const { status } = req.body;
-      if (!['active', 'rejected'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status' });
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status. Must be "approved" or "rejected"' });
       }
 
-      const chef = await User.findOne({ _id: req.params.id, headChef: req.user.id, role: 'user' });
+      const chef = await User.findOne({ _id: req.params.id, headChefId: req.user.id, role: 'user' });
       if (!chef) {
         return res.status(404).json({ message: 'Chef not found' });
       }
 
+      // Update status
       chef.status = status;
+
+      // If approving, set default permissions for team members
+      if (status === 'approved') {
+        chef.permissions = {
+          // Recipe permissions - view only for team members
+          canViewRecipes: true,
+          canEditRecipes: false,
+          canDeleteRecipes: false,
+          canUpdateRecipes: false,
+
+          // Plateup permissions - view only for team members
+          canViewPlateups: true,
+          canCreatePlateups: false,
+          canDeletePlateups: false,
+          canUpdatePlateups: false,
+
+          // Notification permissions - view only for team members
+          canViewNotifications: true,
+          canCreateNotifications: false,
+          canDeleteNotifications: false,
+          canUpdateNotifications: false,
+
+          // Panel permissions - view only for team members
+          canViewPanels: true,
+          canCreatePanels: false,
+          canDeletePanels: false,
+          canUpdatePanels: false,
+
+          // Other permissions - no admin access for team members
+          canManageTeam: false,
+          canAccessAdmin: false,
+        };
+
+        // Send notification to approved team member
+        const notification = new Notification({
+          title: 'Team Access Approved',
+          message: `Congratulations! Your team access request has been approved by ${req.user.name}. You can now log in using your first name as username and last name as password.`,
+          type: 'success',
+          priority: 'medium',
+          sender: req.user.id,
+          recipients: [{ user: chef._id }],
+        });
+
+        await notification.save();
+      }
+
       await chef.save();
 
-      res.json({ success: true, message: 'Chef status updated', data: { id: chef._id, status: chef.status } });
+      res.json({ 
+        success: true, 
+        message: `Chef ${status === 'approved' ? 'approved' : 'rejected'} successfully`, 
+        data: { 
+          id: chef._id, 
+          status: chef.status,
+          firstName: chef.firstName,
+          lastName: chef.lastName
+        } 
+      });
     } catch (error) {
       console.error('Update pending chef error:', error);
       res.status(500).json({ message: 'Server error' });
@@ -384,9 +442,13 @@ const userController = {
 
       const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@chef.local`
       // Check if user already exists
-      const existingChef = await User.findOne({ email, headChef: headChefId, role: 'user' })
+      const existingChef = await User.findOne({ email, headChefId: headChefId, role: 'user' })
       if (existingChef) {
-        return res.status(201).json({ success: true, userId: existingChef._id, status: existingChef.status })
+        return res.status(201).json({ 
+          id: existingChef._id, 
+          status: existingChef.status, 
+          userId: existingChef._id 
+        })
       }
       const tempPassword = Math.random().toString(36).slice(-8)
 
@@ -394,8 +456,10 @@ const userController = {
         email,
         password: tempPassword,
         name: `${firstName} ${lastName}`,
+        firstName: firstName.trim(), // Store as-is for login purposes
+        lastName: lastName.trim(),   // Store as-is for login purposes
         role: 'user',
-        headChef: headChefId,
+        headChefId: headChefId,
         status: 'pending',
         permissions: {
           // Default view permissions for all resources
@@ -423,7 +487,11 @@ const userController = {
 
       await chef.save()
 
-      res.status(201).json({ success: true, userId: chef._id, status: chef.status })
+      res.status(201).json({ 
+        id: chef._id, 
+        status: chef.status, 
+        userId: chef._id 
+      })
     } catch (error) {
       console.error('Request chef access error:', error)
       res.status(500).json({ message: 'Server error' })

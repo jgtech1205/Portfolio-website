@@ -12,7 +12,7 @@ const plateupFolderController = {
         return res.status(404).json({ message: 'User not found' });
       }
       const folders = await PlateupFolder.find({
-        $or: [{ createdBy: user._id }, { createdBy: user.headChef }],
+        $or: [{ createdBy: user._id }, { createdBy: user.headChefId }],
       })
         .sort({ createdAt: -1 })
         .populate('createdBy', 'name email')

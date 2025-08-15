@@ -9,6 +9,7 @@ require('dotenv').config();
 
 const mongoose = require('mongoose');
 const connectDB = require('./database/connection');
+const { validateEnvironment, PORT, MONGODB_URI, CORS_ORIGIN, ALLOWED_ORIGINS } = require('./config/environment');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -30,6 +31,8 @@ const initHeadChef = async () => {
     const headChef = new User({
       email,
       password,
+      firstName: 'Head',
+      lastName: 'Chef',
       name: 'Head Chef',
       role: 'head-chef',
       status: 'active',
@@ -40,6 +43,9 @@ const initHeadChef = async () => {
 };
 
 const app = express();
+
+// Validate environment configuration
+validateEnvironment();
 
 // Connect to MongoDB (with error handling for serverless)
 try {
@@ -56,10 +62,39 @@ app.use(helmet());
 // CORS configuration
 app.use(
   cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'https://chef-frontend-psi.vercel.app',
+        'https://chefenplace-psi.vercel.app'
+      ];
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log('CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
   })
 );
+
+// Handle preflight requests
+app.options('*', cors());
+
+// CORS debugging middleware
+app.use((req, res, next) => {
+  console.log(`🌐 CORS Debug: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
+  next();
+});
 
 // General middleware
 app.use(compression());
@@ -85,6 +120,15 @@ app.use('/api/plateups', plateUpRoutes);
 app.use('/api/plateup-folders', plateupFolderRoutes);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Add routes without /api prefix for frontend compatibility
+app.use('/users', userRoutes);
+app.use('/auth', authRoutes);
+app.use('/chefs', chefRoutes);
+app.use('/panels', panelRoutes);
+app.use('/plateups', plateUpRoutes);
+app.use('/recipes', recipeRoutes);
+app.use('/notifications', notificationRoutes);
+
 // Basic health check
 app.get('/api/health', (req, res) => {
   res.status(200).json({
@@ -93,6 +137,12 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     version: '1.0.0',
+    features: {
+      teamAuthentication: true,
+      organizationIsolation: true,
+      rateLimiting: true,
+      securityLogging: true
+    }
   });
 });
 
@@ -154,9 +204,10 @@ app.use('*', (req, res) => {
 
 // Only start the server if this file is run directly (not imported)
 if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔒 Security features: Organization isolation ${process.env.ORGANIZATION_ISOLATION === 'true' ? 'enabled' : 'disabled'}`);
     console.log(`📱 Chef en Place API is ready!`);
   });
 }

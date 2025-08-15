@@ -10,33 +10,45 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-    organization: {
+    firstName: {
       type: String,
+      required: true,
+      trim: true,
+      index: true, // Index for login queries
     },
-      password: {
+    lastName: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true, // Index for login queries
+    },
+    name: {
+      type: String,
+      trim: true,
+    },
+    password: {
       type: String,
       required: true,
       minlength: 6,
     },
-    name: {
+    organization: {
       type: String,
-      required: true,
       trim: true,
     },
     role: {
       type: String,
-      enum: ["head-chef", "user"],
+      enum: ["head-chef", "user", "team-member"],
       default: "user",
     },
-    headChef: {
+    headChefId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
     status: {
       type: String,
-      enum: ["pending", "active", "rejected"],
-      default: "active",
+      enum: ["pending", "approved", "active", "inactive"],
+      default: "pending",
     },
     savedRecipes: [
       {
@@ -107,6 +119,14 @@ const userSchema = new mongoose.Schema(
   },
 )
 
+// Compute name field from firstName and lastName
+userSchema.pre("save", function (next) {
+  if (this.firstName && this.lastName) {
+    this.name = `${this.firstName} ${this.lastName}`
+  }
+  next()
+})
+
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next()
@@ -164,5 +184,11 @@ userSchema.pre("save", function (next) {
   }
   next()
 })
+
+// Indexes for efficient queries
+userSchema.index({ headChefId: 1, firstName: 1, lastName: 1 }) // For team login queries
+userSchema.index({ headChefId: 1, status: 1 }) // For pending/approved user queries
+userSchema.index({ email: 1 }) // Email queries (already unique)
+userSchema.index({ role: 1, status: 1 }) // For role-based queries
 
 module.exports = mongoose.model("User", userSchema)

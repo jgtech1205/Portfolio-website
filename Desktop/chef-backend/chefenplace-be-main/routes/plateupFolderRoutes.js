@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const auth = require('../middlewares/auth');
+const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require('../middlewares/auth');
 const checkPermission = require('../middlewares/checkPermission');
 const folderController = require('../controllers/plateupFolderController');
 

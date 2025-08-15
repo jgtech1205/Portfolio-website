@@ -1,7 +1,7 @@
 const express = require("express")
 const { body } = require("express-validator")
 const adminController = require("../controllers/adminController")
-const auth = require("../middlewares/auth")
+const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
 const checkPermission = require("../middlewares/checkPermission")
 
 const router = express.Router()
@@ -127,6 +127,38 @@ router.put("/settings", adminController.updateSystemSettings)
  *         description: Log list
  */
 router.get("/logs", adminController.getActivityLogs)
+
+// Security monitoring
+/**
+ * @swagger
+ * /api/admin/security/status:
+ *   get:
+ *     summary: Get security status for IP address
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: ip
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: IP address to check
+ *     responses:
+ *       200:
+ *         description: Security status data
+ */
+router.get("/security/status", adminController.getSecurityStatus)
+
+/**
+ * @swagger
+ * /api/admin/security/alerts:
+ *   get:
+ *     summary: Get security alerts
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Security alerts list
+ */
+router.get("/security/alerts", adminController.getSecurityAlerts)
 
 // Backup and restore
 /**

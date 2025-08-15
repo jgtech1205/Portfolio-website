@@ -2,6 +2,7 @@ const User = require("../database/models/User")
 const Panel = require("../database/models/Panel")
 const Recipe = require("../database/models/Recipe")
 const Notification = require("../database/models/Notification")
+const { getSecurityStatus, getFailedAttempts } = require("../utils/authErrorHandler")
 
 const adminController = {
   // Get dashboard stats
@@ -326,6 +327,66 @@ const adminController = {
       res.status(500).json({ message: "Server error" })
     }
   },
+
+  // Get security monitoring data
+  async getSecurityStatus(req, res) {
+    try {
+      const { ip } = req.query
+      
+      if (!ip) {
+        return res.status(400).json({ 
+          error: 'IP address is required' 
+        })
+      }
+
+      const securityStatus = getSecurityStatus(ip)
+      const failedAttempts = getFailedAttempts(ip)
+
+      res.json({
+        success: true,
+        data: {
+          ip,
+          securityStatus,
+          failedAttempts: failedAttempts ? {
+            count: failedAttempts.count,
+            firstAttempt: new Date(failedAttempts.firstAttempt).toISOString(),
+            lastAttempt: new Date(failedAttempts.lastAttempt).toISOString(),
+            recentReasons: failedAttempts.reasons.slice(-5) // Last 5 attempts
+          } : null
+        }
+      })
+    } catch (error) {
+      console.error('Get security status error:', error)
+      res.status(500).json({ error: 'Server error' })
+    }
+  },
+
+  // Get all security alerts (for dashboard)
+  async getSecurityAlerts(req, res) {
+    try {
+      // This would typically query a database of security events
+      // For now, we'll return a mock structure
+      const alerts = [
+        {
+          id: '1',
+          type: 'failed_login',
+          severity: 'medium',
+          message: 'Multiple failed login attempts detected',
+          timestamp: new Date().toISOString(),
+          ip: '192.168.1.100',
+          count: 5
+        }
+      ]
+
+      res.json({
+        success: true,
+        data: alerts
+      })
+    } catch (error) {
+      console.error('Get security alerts error:', error)
+      res.status(500).json({ error: 'Server error' })
+    }
+  }
 }
 
 module.exports = adminController

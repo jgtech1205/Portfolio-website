@@ -13,7 +13,7 @@ const plateupController = {
             if (!user) {
                 return res.status(404).json({ message: 'User not found' });
             }
-            const query = { $or: [{ createdBy: user._id }, { createdBy: user.headChef }] };
+            const query = { $or: [{ createdBy: user._id }, { createdBy: user.headChefId }] };
             if (folder) {
                 query.folder = folder;
             }
