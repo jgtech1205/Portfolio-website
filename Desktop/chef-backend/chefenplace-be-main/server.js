@@ -1,6 +1,6 @@
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
+const { corsMiddleware, stripeCorsHandler, globalOptionsHandler } = require('./middlewares/cors');
 const compression = require('compression');
 const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
@@ -22,6 +22,8 @@ const chefRoutes = require('./routes/chefRoutes');
 const User = require('./database/models/User');
 const plateUpRoutes = require('./routes/plateupRoutes');
 const plateupFolderRoutes = require('./routes/plateupFolderRoutes');
+const restaurantRoutes = require('./routes/restaurantRoutes');
+const stripeRoutes = require('./routes/stripeRoutes');
 
 const initHeadChef = async () => {
   const exists = await User.findOne({ role: 'head-chef' });
@@ -59,42 +61,14 @@ try {
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'https://chef-frontend-psi.vercel.app',
-        'https://chefenplace-psi.vercel.app'
-      ];
-      
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.log('CORS blocked origin:', origin);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: true,
-    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
-  })
-);
+// Global OPTIONS handler - must come before other CORS middleware
+app.use(globalOptionsHandler);
 
-// Handle preflight requests
-app.options('*', cors());
+// Global CORS middleware
+app.use(corsMiddleware);
 
-// CORS debugging middleware
-app.use((req, res, next) => {
-  console.log(`🌐 CORS Debug: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
-  next();
-});
+// Specific CORS handling for Stripe endpoints
+app.use('/api/stripe', stripeCorsHandler);
 
 // General middleware
 app.use(compression());
@@ -118,6 +92,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/plateups', plateUpRoutes);
 app.use('/api/plateup-folders', plateupFolderRoutes);
+app.use('/api/restaurant', restaurantRoutes);
+app.use('/api/stripe', stripeRoutes);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Add routes without /api prefix for frontend compatibility
@@ -184,6 +160,18 @@ app.get('/api/test', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
+  
+  // Handle CORS errors specifically
+  if (err.message === 'Not allowed by CORS') {
+    console.log(`❌ CORS Error: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
+    return res.status(403).json({ 
+      message: 'CORS policy violation',
+      error: 'Origin not allowed',
+      origin: req.headers.origin,
+      allowedOrigins: ['https://chef-frontend-psi.vercel.app', 'https://chefenplace-psi.vercel.app', 'https://chef-app-backend.vercel.app']
+    });
+  }
+  
   res.status(500).json({
     message: 'Internal server error',
     error:

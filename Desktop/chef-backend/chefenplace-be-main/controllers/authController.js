@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken")
+const mongoose = require("mongoose")
 const { validationResult } = require("express-validator")
 const User = require("../database/models/User")
 const { generateTokens, generateTeamTokens, generateHeadChefTokens } = require("../utils/tokenUtils")
@@ -24,7 +25,7 @@ const authController = {
       }
 
       // Find user
-      const user = await User.findOne({ email: inputValidation.sanitizedUsername, isActive: true })
+      const user = await User.findOne({ email: inputValidation.sanitizedUsername })
       if (!user) {
         return handleAuthError(req, res, 'USER_NOT_FOUND', null)
       }
@@ -35,8 +36,8 @@ const authController = {
         return handleAuthError(req, res, 'INVALID_CREDENTIALS', user)
       }
 
-      // Check if user is approved (for team members)
-      if (user.role === "user" && user.status !== "approved" && user.status !== "active") {
+      // Check if user is active/approved
+      if (user.status !== "approved" && user.status !== "active") {
         return handleAuthError(req, res, 'USER_NOT_APPROVED', user)
       }
 
@@ -64,7 +65,7 @@ const authController = {
     try {
       const { chefId, headChefId } = req.params
       // Find user by chefId
-      const user = await User.findOne({ _id: chefId, status: "active", isActive: true, headChefId: headChefId })
+      const user = await User.findOne({ _id: chefId, status: "active", headChefId: headChefId })
       if (!user) {
         return res.status(HTTP_STATUS.NOT_FOUND).json({ 
           message: "User not found",
@@ -301,14 +302,16 @@ const authController = {
     }
   },
 
-  // Team member login
+  // Team member login with restaurant-specific validation
   async teamLogin(req, res) {
     try {
+      console.log('🔍 Team login attempt:', { params: req.params, body: req.body });
       const { headChefId } = req.params
       const { username, password } = req.body
 
       // Validate request body has username and password fields
       if (!username || !password) {
+        console.log('❌ Missing credentials');
         return res.status(400).json({ 
           message: "Missing username or password",
           code: "MISSING_CREDENTIALS"
@@ -317,62 +320,121 @@ const authController = {
 
       // Validate headChefId parameter exists and is valid
       if (!headChefId) {
+        console.log('❌ Missing headChefId');
         return res.status(400).json({ 
           message: "Missing headChefId parameter",
           code: "MISSING_HEAD_CHEF_ID"
         })
       }
 
-      // Find user with case-insensitive matching
-      const user = await User.findOne({
-        headChefId: headChefId,
-        firstName: { $regex: new RegExp(`^${username}$`, 'i') },
-        lastName: { $regex: new RegExp(`^${password}$`, 'i') }
+      // Validate headChefId format (MongoDB ObjectId)
+      if (!mongoose.Types.ObjectId.isValid(headChefId)) {
+        console.log('❌ Invalid headChefId format');
+        return res.status(400).json({
+          message: "Invalid restaurant ID format",
+          code: "INVALID_RESTAURANT_ID"
+        })
+      }
+
+      // Step 1: Verify the restaurant (head chef) exists and is active
+      console.log('🔍 Validating restaurant:', headChefId);
+      const headChef = await User.findOne({
+        _id: headChefId,
+        role: "head-chef",
+        status: { $in: ["active", "approved"] }
       })
 
-      // 404 Not Found: User not found for this headChefId + firstName combination
-      if (!user) {
+      if (!headChef) {
+        console.log('❌ Restaurant not found or inactive');
+        return res.status(404).json({
+          message: "Restaurant not found or inactive",
+          code: "RESTAURANT_NOT_FOUND"
+        })
+      }
+
+      console.log('✅ Restaurant validated:', headChef.email);
+
+      // Step 2: Find team member with restaurant-specific validation
+      console.log('🔍 Searching for team member:', { headChefId, username, password });
+      const teamMember = await User.findOne({
+        headChefId: headChefId, // Must belong to this specific restaurant
+        firstName: { $regex: new RegExp(`^${username}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${password}$`, 'i') },
+        role: { $in: ["user", "team-member"] } // Must be a team member, not head chef
+      })
+
+      console.log('🔍 Team member found:', teamMember ? 'Yes' : 'No');
+      
+      // 404 Not Found: Team member not found for this restaurant
+      if (!teamMember) {
+        console.log('❌ Team member not found for this restaurant');
         return res.status(404).json({ 
-          message: "User not found",
-          code: "USER_NOT_FOUND"
+          message: "Invalid credentials",
+          code: "INVALID_CREDENTIALS"
         })
       }
 
-      // 403 Forbidden: User exists but status is not "approved" or "active"
-      if (user.status !== "approved" && user.status !== "active") {
+      console.log('🔍 Team member status:', teamMember.status);
+      
+      // 403 Forbidden: Team member exists but status is not "approved" or "active"
+      if (teamMember.status !== "approved" && teamMember.status !== "active") {
+        console.log('❌ Team member not approved');
         return res.status(403).json({ 
-          message: "User not approved",
-          code: "USER_NOT_APPROVED"
+          message: "Account not approved",
+          code: "ACCOUNT_NOT_APPROVED"
         })
       }
 
+      // Step 3: Verify team member belongs to the correct restaurant
+      if (teamMember.headChefId.toString() !== headChefId) {
+        console.log('❌ Team member belongs to different restaurant');
+        return res.status(403).json({
+          message: "Access denied",
+          code: "ACCESS_DENIED"
+        })
+      }
+
+      console.log('🔍 Generating tokens...');
+      
       // Update last login
-      user.lastLogin = new Date()
-      await user.save()
+      teamMember.lastLogin = new Date()
+      await teamMember.save()
 
-      // Generate JWT tokens
-      const { accessToken, refreshToken } = generateTeamTokens(user._id, user.headChefId, user.role)
+      // Generate JWT tokens with restaurant context
+      const { accessToken, refreshToken } = generateTeamTokens(
+        teamMember._id, 
+        teamMember.headChefId, 
+        teamMember.role
+      )
 
-      // Return user data with tokens (matching frontend requirements exactly)
+      console.log('✅ Tokens generated successfully');
+      
+      // Return team member data with tokens
       res.status(200).json({
         user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: "team-member", // Set role as specified
-          headChefId: user.headChefId,
-          permissions: user.permissions,
-          status: user.status
+          id: teamMember._id,
+          firstName: teamMember.firstName,
+          lastName: teamMember.lastName,
+          name: teamMember.name,
+          role: "team-member",
+          headChefId: teamMember.headChefId,
+          permissions: teamMember.permissions,
+          status: teamMember.status,
+          restaurant: {
+            id: headChef._id,
+            name: headChef.name || `${headChef.firstName} ${headChef.lastName}`.trim()
+          }
         },
         accessToken,
         refreshToken
       })
 
     } catch (error) {
-      console.error("Team login error:", error)
+      console.error("❌ Team login error:", error)
       res.status(500).json({ 
         message: "Internal server error",
-        code: "INTERNAL_ERROR"
+        code: "INTERNAL_ERROR",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       })
     }
   },

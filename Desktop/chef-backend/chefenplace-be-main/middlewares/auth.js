@@ -12,14 +12,14 @@ const auth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await User.findById(decoded.userId).select("-password")
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid token." })
     }
 
-    // Check if user is approved (for team members)
-    if (user.role === "user" && user.status !== "approved" && user.status !== "active") {
+    // Check if user is active/approved
+    if (user.status !== "approved" && user.status !== "active") {
       return res.status(401).json({ 
-        message: "Account not approved. Please contact your head chef for approval." 
+        message: "Account not approved or inactive." 
       })
     }
 
@@ -43,12 +43,12 @@ const teamAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await User.findById(decoded.userId).select("-password")
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid token." })
     }
 
     // Ensure user is a team member (not head chef)
-    if (user.role !== "user") {
+    if (user.role !== "user" && user.role !== "team-member") {
       return res.status(403).json({ 
         message: "Access denied. Team member access only." 
       })
@@ -89,7 +89,7 @@ const organizationAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await User.findById(decoded.userId).select("-password")
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid token." })
     }
 

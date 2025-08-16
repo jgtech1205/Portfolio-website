@@ -24,6 +24,40 @@ HEAD_CHEF_JWT_SECRET=your-head-chef-specific-jwt-secret-here
 
 **Note**: If `TEAM_JWT_SECRET` or `HEAD_CHEF_JWT_SECRET` are not set, they will fall back to `JWT_SECRET`.
 
+## 💳 Stripe Configuration
+
+### Core Stripe Keys
+```bash
+# Stripe secret key (get from Stripe Dashboard)
+STRIPE_SECRET_KEY=sk_test_... or sk_live_...
+
+# Stripe webhook endpoint secret (get from Stripe Dashboard)
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### Stripe Price IDs
+```bash
+# Pro plan price IDs
+STRIPE_PRO_MONTHLY_PRICE_ID=price_...
+STRIPE_PRO_YEARLY_PRICE_ID=price_...
+
+# Enterprise plan price IDs
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_YEARLY_PRICE_ID=price_...
+```
+
+### Frontend URL for Stripe
+```bash
+# Frontend URL for Stripe success/cancel redirects
+FRONTEND_URL=https://chef-frontend-psi.vercel.app
+```
+
+**Important**: 
+- Use `sk_test_...` for development/testing
+- Use `sk_live_...` for production
+- Webhook secret is different for test/live modes
+- Price IDs are different for test/live modes
+
 ## ⏱️ Session Configuration
 
 ```bash
@@ -221,6 +255,15 @@ JWT_SECRET=your-super-secret-jwt-key-here
 JWT_REFRESH_SECRET=your-super-secret-refresh-key-here
 TEAM_JWT_SECRET=your-team-specific-jwt-secret-here
 HEAD_CHEF_JWT_SECRET=your-head-chef-specific-jwt-secret-here
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_... or sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRO_MONTHLY_PRICE_ID=price_...
+STRIPE_PRO_YEARLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=price_...
+STRIPE_ENTERPRISE_YEARLY_PRICE_ID=price_...
+FRONTEND_URL=https://chef-frontend-psi.vercel.app
 
 # Session Configuration
 SESSION_TIMEOUT=3600
