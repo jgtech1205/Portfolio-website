@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
 const { validationResult } = require("express-validator")
 const User = require("../database/models/User")
+const Request = require("../database/models/Request")
+const Restaurant = require("../database/models/Restaurant")
 const { generateTokens, generateTeamTokens, generateHeadChefTokens } = require("../utils/tokenUtils")
 const { validateTeamMemberCredentials } = require("../utils/teamAuthUtils")
 const { handleAuthError, validateLoginInputs, clearFailedAttempts } = require("../utils/authErrorHandler")
@@ -94,11 +96,29 @@ const authController = {
         })
       }
 
-      const { email, password, name, role = "head-chef" } = req.body
+      // Extract both old and new field names for backward compatibility
+      const { 
+        email, 
+        password, 
+        name, 
+        role = "head-chef",
+        // New restaurant fields
+        restaurantName,
+        restaurantType,
+        location,
+        headChefName,
+        headChefEmail,
+        headChefPassword
+      } = req.body
+
+      // Use new fields if provided, otherwise fall back to old fields
+      const finalEmail = headChefEmail || email
+      const finalPassword = headChefPassword || password
+      const finalName = headChefName || name
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(email)) {
+      if (!emailRegex.test(finalEmail)) {
         return res.status(400).json({ 
           message: "Invalid email format",
           code: "INVALID_EMAIL"
@@ -106,7 +126,7 @@ const authController = {
       }
 
       // Validate password strength (minimum 6 characters)
-      if (!password || password.length < 6) {
+      if (!finalPassword || finalPassword.length < 6) {
         return res.status(400).json({ 
           message: "Password must be at least 6 characters long",
           code: "WEAK_PASSWORD"
@@ -114,7 +134,7 @@ const authController = {
       }
 
       // Check if email already exists in database
-      const existingUser = await User.findOne({ email })
+      const existingUser = await User.findOne({ email: finalEmail })
       if (existingUser) {
         return res.status(409).json({ 
           message: "Email already exists",
@@ -122,47 +142,58 @@ const authController = {
         })
       }
 
-      // Generate unique headChefId (using MongoDB ObjectId)
-      const headChefId = new mongoose.Types.ObjectId()
-
-      // Create new user with role "head-chef", status "active", and full permissions
+      // Create new user with role "head-chef" - permissions will be set by pre-save hook
       const user = new User({
-        email,
-        password, // Will be hashed by pre-save hook
-        firstName: name, // Use restaurant name as firstName
+        email: finalEmail,
+        password: finalPassword, // Will be hashed by pre-save hook
+        firstName: finalName, // Use head chef name as firstName
         lastName: "Head Chef", // Default lastName for head chefs
         role: "head-chef",
         status: "active",
-        headChefId: headChefId, // Set headChefId to their own ID
-        permissions: {
-          canViewPanels: true,
-          canViewRecipes: true,
-          canViewPlateups: true,
-          canViewNotifications: true,
-          canManageTeam: true,
-          canCreateNotifications: true,
-          canEditRecipes: true,
-          canDeleteRecipes: true,
-          canUpdateRecipes: true,
-          canCreatePlateups: true,
-          canDeletePlateups: true,
-          canUpdatePlateups: true,
-          canDeleteNotifications: true,
-          canUpdateNotifications: true,
-          canCreatePanels: true,
-          canDeletePanels: true,
-          canUpdatePanels: true,
-          canAccessAdmin: true
-        }
+        // Don't set headChefId yet - we'll set it after save
+        // Don't set permissions here - let the pre-save hook handle it
       })
 
       await user.save()
+
+      // Now set headChefId to the user's own _id
+      user.headChefId = user._id
+      await user.save()
+
+      // Create restaurant record if restaurant information is provided
+      let restaurant = null
+      if (restaurantName && restaurantType && location) {
+        try {
+          restaurant = new Restaurant({
+            restaurantName,
+            restaurantType,
+            location: {
+              address: location.address || "Not specified",
+              city: location.city || "Not specified", 
+              state: location.state || "Not specified",
+              zipCode: location.zipCode || "Not specified",
+              country: location.country || "United States"
+            },
+            headChefId: user._id,
+            planType: "trial",
+            billingCycle: "monthly",
+            subscriptionStatus: "active"
+          })
+
+          await restaurant.save()
+          console.log(`✅ Restaurant created for head chef: ${restaurant.restaurantName}`)
+        } catch (restaurantError) {
+          console.error("❌ Error creating restaurant:", restaurantError)
+          // Don't fail the registration if restaurant creation fails
+          // The head chef can still use the system
+        }
+      }
 
       // Generate JWT accessToken and refreshToken
       const { accessToken, refreshToken } = generateHeadChefTokens(user._id)
 
       // Return user object with specified format
-      res.status(201).json({
+      const response = {
         user: {
           id: user._id,
           email: user.email,
@@ -174,7 +205,22 @@ const authController = {
         },
         accessToken,
         refreshToken
-      })
+      }
+
+      // Include restaurant info if created
+      if (restaurant) {
+        response.restaurant = {
+          id: restaurant._id,
+          restaurantName: restaurant.restaurantName,
+          restaurantType: restaurant.restaurantType,
+          planType: restaurant.planType,
+          billingCycle: restaurant.billingCycle,
+          subscriptionStatus: restaurant.subscriptionStatus,
+          trialEndDate: restaurant.trialEndDate
+        }
+      }
+
+      res.status(201).json(response)
     } catch (error) {
       console.error("Registration error:", error)
       res.status(500).json({ 
@@ -438,6 +484,246 @@ const authController = {
       })
     }
   },
+
+  // Get pending team member requests for head chef
+  async getPendingRequests(req, res) {
+    try {
+      // Check if user is a head chef
+      if (req.user.role !== 'head-chef') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only head chefs can view pending requests',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      console.log('🔍 Fetching pending requests for head chef:', {
+        headChefId: req.user._id,
+        userId: req.user._id
+      });
+
+      // Get pending requests for this head chef
+      const pendingRequests = await Request.find({
+        headChefId: req.user._id,
+        status: 'pending'
+      }).sort({ createdAt: -1 });
+
+      console.log(`✅ Found ${pendingRequests.length} pending requests`);
+
+      res.status(200).json({
+        success: true,
+        data: pendingRequests
+      });
+
+    } catch (error) {
+      console.error('❌ Get pending requests error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch pending requests',
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  },
+
+  // Approve team member request and create account
+  async approveRequest(req, res) {
+    try {
+      const { requestId } = req.params;
+
+      // Check if user is a head chef
+      if (req.user.role !== 'head-chef') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only head chefs can approve requests',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      // Validate request ID
+      if (!mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request ID',
+          code: 'INVALID_REQUEST_ID'
+        });
+      }
+
+      console.log('🔍 Approving request:', {
+        requestId,
+        headChefId: req.user._id
+      });
+
+      // Find the request and ensure it belongs to this head chef
+      const request = await Request.findOne({
+        _id: requestId,
+        headChefId: req.user._id,
+        status: 'pending'
+      });
+
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found or already processed',
+          code: 'REQUEST_NOT_FOUND'
+        });
+      }
+
+      // Generate email and password for the team member
+      const email = `${request.firstName.toLowerCase()}.${request.lastName.toLowerCase()}.${Date.now()}@chef.local`;
+      const tempPassword = Math.random().toString(36).slice(-8);
+
+      // Create the team member user account - permissions will be set by pre-save hook
+      const teamMember = new User({
+        email,
+        password: tempPassword,
+        firstName: request.firstName,
+        lastName: request.lastName,
+        name: `${request.firstName} ${request.lastName}`,
+        role: 'team-member',
+        headChefId: req.user._id,
+        status: 'approved'
+        // Don't set permissions here - let the pre-save hook handle it
+      });
+
+      await teamMember.save();
+
+      // Update the request status to approved
+      request.status = 'approved';
+      request.approvedAt = new Date();
+      await request.save();
+
+      console.log('✅ Request approved and team member created:', {
+        requestId: request._id,
+        userId: teamMember._id,
+        email: teamMember.email,
+        name: teamMember.name
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Request approved successfully',
+        data: {
+          requestId: request._id,
+          userId: teamMember._id
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Approve request error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to approve request',
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  },
+
+  // Reject team member request
+  async rejectRequest(req, res) {
+    try {
+      const { requestId } = req.params;
+
+      // Check if user is a head chef
+      if (req.user.role !== 'head-chef') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only head chefs can reject requests',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      // Validate request ID
+      if (!mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid request ID',
+          code: 'INVALID_REQUEST_ID'
+        });
+      }
+
+      console.log('🔍 Rejecting request:', {
+        requestId,
+        headChefId: req.user._id
+      });
+
+      // Find the request and ensure it belongs to this head chef
+      const request = await Request.findOne({
+        _id: requestId,
+        headChefId: req.user._id,
+        status: 'pending'
+      });
+
+      if (!request) {
+        return res.status(404).json({
+          success: false,
+          message: 'Request not found or already processed',
+          code: 'REQUEST_NOT_FOUND'
+        });
+      }
+
+      // Update the request status to rejected
+      request.status = 'rejected';
+      request.rejectedAt = new Date();
+      await request.save();
+
+      console.log('✅ Request rejected:', {
+        requestId: request._id,
+        name: `${request.firstName} ${request.lastName}`
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Request rejected successfully',
+        data: {
+          requestId: request._id
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Reject request error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reject request',
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  },
+
+  // Get current user profile
+  async getProfile(req, res) {
+    try {
+      // User is already authenticated via auth middleware
+      const user = await User.findById(req.user.id).select('-password');
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
+
+      console.log('✅ Profile retrieved for user:', {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions
+      });
+
+      res.status(200).json({
+        success: true,
+        data: user
+      });
+
+    } catch (error) {
+      console.error('❌ Get profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get profile',
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
 }
 
 module.exports = authController

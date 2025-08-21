@@ -9,11 +9,21 @@ const plateupController = {
     async getAllPlateups(req, res) {
         try {
             const { folder } = req.query;
-            const user = await User.findById(req.user._id);
-            if (!user) {
-                return res.status(404).json({ message: 'User not found' });
-            }
-            const query = { $or: [{ createdBy: user._id }, { createdBy: user.headChefId }] };
+            
+            // Use headChefId for proper organization isolation
+            const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+            
+            console.log('🔍 Getting plateups for head chef:', {
+                headChefId: headChefId,
+                userRole: req.user?.role,
+                userId: req.user?._id
+            });
+
+            const query = { 
+                isActive: true,
+                headChefId: headChefId // Filter by organization
+            };
+            
             if (folder) {
                 query.folder = folder;
             }
@@ -23,6 +33,8 @@ const plateupController = {
                 .populate('folder', 'name')
                 .populate('createdBy', 'name email')
                 .populate('updatedBy', 'name email');
+
+            console.log(`✅ Found ${plateups.length} plateups for head chef ${headChefId}`);
 
             res.json({
                 success: true,

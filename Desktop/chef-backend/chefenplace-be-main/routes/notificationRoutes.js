@@ -1,15 +1,34 @@
-const express = require("express")
-const { body } = require("express-validator")
-const notificationController = require("../controllers/notificationController")
-const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
-const checkPermission = require("../middlewares/checkPermission")
+const express = require("express");
+const { body, validationResult } = require("express-validator");
+const notificationController = require("../controllers/notificationController");
+const { auth } = require("../middlewares/auth");
+const { headChefAuth } = require("../middlewares/headChefAuth");
+const checkPermission = require("../middlewares/checkPermission");
+const { checkReadOnlyPermission } = require("../middlewares/readOnlyAuth");
+const { ensureConnection } = require("../database/connection");
 
-const router = express.Router()
+const router = express.Router();
 
-// All routes require authentication
-router.use(auth)
+/** Ensure DB connection for all notification routes (handles serverless cold starts) */
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: "Database unavailable" });
+  }
+});
 
-// Get user notifications
+/** All notification routes require an authenticated user */
+router.use(auth);
+
+/** Helper: validate express-validator results */
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  next();
+};
+
 /**
  * @swagger
  * /api/notifications:
@@ -22,11 +41,10 @@ router.use(auth)
  */
 router.get(
   "/",
-  checkPermission("canViewNotifications"),
-  notificationController.getUserNotifications,
-)
+  checkReadOnlyPermission("canViewNotifications"),
+  notificationController.getUserNotifications
+);
 
-// Get unread count
 /**
  * @swagger
  * /api/notifications/unread-count:
@@ -39,11 +57,10 @@ router.get(
  */
 router.get(
   "/unread-count",
-  checkPermission("canViewNotifications"),
-  notificationController.getUnreadCount,
-)
+  checkReadOnlyPermission("canViewNotifications"),
+  notificationController.getUnreadCount
+);
 
-// Mark notification as read
 /**
  * @swagger
  * /api/notifications/{id}/read:
@@ -63,10 +80,9 @@ router.get(
 router.put(
   "/:id/read",
   checkPermission("canUpdateNotifications"),
-  notificationController.markAsRead,
-)
+  notificationController.markAsRead
+);
 
-// Mark all as read
 /**
  * @swagger
  * /api/notifications/mark-all-read:
@@ -80,10 +96,9 @@ router.put(
 router.put(
   "/mark-all-read",
   checkPermission("canUpdateNotifications"),
-  notificationController.markAllAsRead,
-)
+  notificationController.markAllAsRead
+);
 
-// Send notification (requires permission)
 /**
  * @swagger
  * /api/notifications:
@@ -94,19 +109,22 @@ router.put(
  *       201:
  *         description: Notification sent
  */
+// Restrict creation to Head Chef
 router.post(
   "/",
+  headChefAuth,
   checkPermission("canCreateNotifications"),
   [
-    body("title").trim().isLength({ min: 1 }),
-    body("message").trim().isLength({ min: 1 }),
-    body("recipients").isArray({ min: 1 }),
-    body("type").optional().isIn(["info", "warning", "success", "error", "recipe", "system"]),
+    body("title").trim().isLength({ min: 1 }).withMessage("title is required"),
+    body("message").trim().isLength({ min: 1 }).withMessage("message is required"),
+    body("recipients").isArray({ min: 1 }).withMessage("recipients must be a non-empty array"),
+    body("type").optional().isIn(["info", "warning", "success", "error", "recipe", "system"])
+      .withMessage("invalid type"),
   ],
-  notificationController.sendNotification,
-)
+  validate,
+  notificationController.sendNotification
+);
 
-// Delete notification
 /**
  * @swagger
  * /api/notifications/{id}:
@@ -123,10 +141,12 @@ router.post(
  *       200:
  *         description: Notification deleted
  */
+// Restrict deletion to Head Chef
 router.delete(
   "/:id",
+  headChefAuth,
   checkPermission("canDeleteNotifications"),
-  notificationController.deleteNotification,
-)
+  notificationController.deleteNotification
+);
 
-module.exports = router
+module.exports = router;

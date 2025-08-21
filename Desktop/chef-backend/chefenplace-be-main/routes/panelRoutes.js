@@ -2,13 +2,29 @@ const express = require("express")
 const { body } = require("express-validator")
 const panelController = require("../controllers/panelController")
 const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
+const { headChefAuth } = require("../middlewares/headChefAuth")
 const checkPermission = require("../middlewares/checkPermission")
+const { readOnlyAuth, checkReadOnlyPermission } = require("../middlewares/readOnlyAuth")
 const upload = require("../middlewares/upload")
+const { ensureConnection } = require("../database/connection")
 
 const router = express.Router()
 
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
+
 // All routes require authentication
 router.use(auth)
+
+// Organization-based routes (allow both headchefs and their team members)
+router.use("/", readOnlyAuth)
 
 // Get all panels
 /**
@@ -21,7 +37,7 @@ router.use(auth)
  *       200:
  *         description: List of panels
  */
-router.get("/", checkPermission("canViewPanels"), panelController.getAllPanels)
+router.get("/", checkReadOnlyPermission("canViewPanels"), panelController.getAllPanels)
 
 // Reorder panels (must be before /:id routes)
 /**
@@ -78,7 +94,7 @@ router.put(
  *       200:
  *         description: Panel data
  */
-router.get("/:id", checkPermission("canViewPanels"), panelController.getPanel)
+router.get("/:id", checkReadOnlyPermission("canViewPanels"), panelController.getPanel)
 
 // Create panel (requires edit permission)
 /**

@@ -2,13 +2,30 @@ const express = require("express")
 const { body } = require("express-validator")
 const userController = require("../controllers/userController")
 const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
+const { headChefAuth } = require("../middlewares/headChefAuth")
 const checkPermission = require("../middlewares/checkPermission")
 const upload = require("../middlewares/upload")
+const { ensureConnection } = require("../database/connection")
 
 const router = express.Router()
 
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
+
 // All routes require authentication
 router.use(auth)
+
+// Head chef specific routes (require head chef authentication)
+// Note: /team routes use checkPermission instead of headChefAuth
+router.use("/pending-chefs", headChefAuth)
+router.use("/invite-link", headChefAuth)
 
 // Profile routes
 /**
@@ -174,6 +191,9 @@ router.delete("/team/:id", checkPermission("canManageTeam"), userController.remo
 
 // Generate invite link for chefs
 router.get("/invite-link", checkPermission("canManageTeam"), userController.generateInviteLink)
+
+// Get team access link for the logged-in head chef
+router.get("/team-access-link", checkPermission("canManageTeam"), userController.getTeamAccessLink)
 
 // Pending chef management
 /**

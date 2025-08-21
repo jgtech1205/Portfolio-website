@@ -3,18 +3,30 @@ const { body } = require("express-validator")
 const plateupController = require("../controllers/plateupController")
 const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
 const checkPermission = require("../middlewares/checkPermission")
+const { checkReadOnlyPermission } = require("../middlewares/readOnlyAuth")
 const upload = require("../middlewares/upload")
+const { ensureConnection } = require("../database/connection")
 
 const router = express.Router()
+
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
 
 // All routes require authentication
 router.use(auth)
 
 // Get all plateups
-router.get("/", checkPermission("canViewPlateups"), plateupController.getAllPlateups)
+router.get("/", checkReadOnlyPermission("canViewPlateups"), plateupController.getAllPlateups)
 
 // Get single plateup
-router.get("/:id", checkPermission("canViewPlateups"), plateupController.getPlateup)
+router.get("/:id", checkReadOnlyPermission("canViewPlateups"), plateupController.getPlateup)
 
 // Create plateup
 router.post(

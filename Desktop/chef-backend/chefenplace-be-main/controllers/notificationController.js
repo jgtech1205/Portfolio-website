@@ -8,9 +8,19 @@ const notificationController = {
     try {
       const { page = 1, limit = 20, unreadOnly = false } = req.query
       const userId = req.user._id
+      
+      // Use headChefId for proper organization isolation
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔍 Getting notifications for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        userId: userId
+      });
 
       const baseMatch = {
         isActive: true,
+        headChefId: headChefId, // Filter by organization
         $or: [
           { "recipients.user": userId },
           { sender: userId },
@@ -106,10 +116,14 @@ const notificationController = {
   // Get unread count
   async getUnreadCount(req, res) {
     try {
+      // Use headChefId for proper organization isolation
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
       const count = await Notification.countDocuments({
         "recipients.user": req.user.id,
         "recipients.read": false,
         isActive: true,
+        headChefId: headChefId, // Filter by organization
       })
 
       res.json({
@@ -125,9 +139,13 @@ const notificationController = {
   // Mark notification as read
   async markAsRead(req, res) {
     try {
+      // Use headChefId for proper organization isolation
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
       const notification = await Notification.findOneAndUpdate(
         {
           _id: req.params.id,
+          headChefId: headChefId, // Ensure notification belongs to this organization
           "recipients.user": req.user.id,
         },
         {
@@ -156,8 +174,12 @@ const notificationController = {
   // Mark all as read
   async markAllAsRead(req, res) {
     try {
+      // Use headChefId for proper organization isolation
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
       await Notification.updateMany(
         {
+          headChefId: headChefId, // Ensure notifications belong to this organization
           "recipients.user": req.user.id,
           "recipients.read": false,
         },
@@ -189,21 +211,35 @@ const notificationController = {
 
       const { title, message, recipients, type = "info", priority = "medium", scheduledFor } = req.body
 
-      // Validate recipients
+      // Use headChefId for proper organization isolation
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔍 Creating notification for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        senderId: req.user?.id
+      });
+
+      // Validate recipients (only team members from this headchef)
       const validUsers = await User.find({
         _id: { $in: recipients },
+        headChefId: headChefId, // Only team members from this headchef
         isActive: true,
-      }).select("_id")
+        role: { $in: ["user", "team-member"] } // Only team members, not other headchefs
+      }).select("_id firstName lastName email")
 
       if (validUsers.length === 0) {
-        return res.status(400).json({ message: "No valid recipients found" })
+        return res.status(400).json({ message: "No valid recipients found. Recipients must be team members from your organization." })
       }
+
+      console.log(`✅ Found ${validUsers.length} valid recipients:`, validUsers.map(u => `${u.firstName} ${u.lastName}`));
 
       const notification = new Notification({
         title,
         message,
         type,
         priority,
+        headChefId: headChefId, // Set organization context
         sender: req.user.id,
         recipients: validUsers.map((user) => ({ user: user._id })),
         scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
@@ -211,6 +247,8 @@ const notificationController = {
 
       await notification.save()
       await notification.populate("sender", "name email avatar")
+
+      console.log(`✅ Notification created successfully: ${notification.title}`);
 
       res.status(201).json({
         success: true,

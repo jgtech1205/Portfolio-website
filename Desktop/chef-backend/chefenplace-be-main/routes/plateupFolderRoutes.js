@@ -3,8 +3,19 @@ const { body } = require('express-validator');
 const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require('../middlewares/auth');
 const checkPermission = require('../middlewares/checkPermission');
 const folderController = require('../controllers/plateupFolderController');
+const { ensureConnection } = require('../database/connection');
 
 const router = express.Router();
+
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
 
 router.use(auth);
 

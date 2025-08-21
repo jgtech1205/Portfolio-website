@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const User = require('../database/models/User');
+const Request = require('../database/models/Request');
 const Notification = require('../database/models/Notification');
 const { uploadImage, deleteImage } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
@@ -188,9 +189,24 @@ const userController = {
   // Get team members
   async getTeamMembers(req, res) {
     try {
-      const users = await User.find({ isActive: true })
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔍 Getting team members for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        restaurantId: req.headChefContext?.restaurantId
+      });
+
+      // Filter team members by headChefId to ensure restaurant isolation
+      const users = await User.find({ 
+        headChefId: headChefId,
+        role: { $in: ["user", "team-member"] } // Only team members, not head chefs
+      })
         .select('-password')
-        .sort({ role: 1, name: 1 });
+        .sort({ role: 1, firstName: 1, lastName: 1 });
+
+      console.log(`✅ Found ${users.length} team members for restaurant`);
 
       res.json({
         success: true,
@@ -335,6 +351,41 @@ const userController = {
     }
   },
 
+  // Get team access link for the logged-in head chef
+  async getTeamAccessLink(req, res) {
+    try {
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔗 Generating team access link for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        restaurantId: req.headChefContext?.restaurantId
+      });
+
+      if (!headChefId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Head chef ID not found' 
+        });
+      }
+
+      const teamAccessUrl = `${process.env.FRONTEND_URL || 'https://chef-frontend-psi.vercel.app'}/team-access/${headChefId}`;
+      
+      console.log('✅ Team access link generated:', teamAccessUrl);
+
+      res.json({ 
+        success: true, 
+        teamAccessUrl,
+        headChefId: headChefId,
+        restaurantName: req.headChefContext?.restaurantName || req.user?.restaurantName
+      });
+    } catch (error) {
+      console.error('Get team access link error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
   // List pending chefs for head chef
   async listPendingChefs(req, res) {
     try {
@@ -440,57 +491,43 @@ const userController = {
         return res.status(404).json({ message: 'Head chef not found' })
       }
 
-      const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@chef.local`
-      // Check if user already exists
-      const existingChef = await User.findOne({ email, headChefId: headChefId, role: 'user' })
-      if (existingChef) {
+      // Check if a request already exists for this person
+      const existingRequest = await Request.findOne({ 
+        headChefId: headChefId, 
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        status: 'pending'
+      })
+      
+      if (existingRequest) {
         return res.status(201).json({ 
-          id: existingChef._id, 
-          status: existingChef.status, 
-          userId: existingChef._id 
+          id: existingRequest._id, 
+          status: existingRequest.status, 
+          requestId: existingRequest._id 
         })
       }
-      const tempPassword = Math.random().toString(36).slice(-8)
 
-      const chef = new User({
-        email,
-        password: tempPassword,
-        name: `${firstName} ${lastName}`,
-        firstName: firstName.trim(), // Store as-is for login purposes
-        lastName: lastName.trim(),   // Store as-is for login purposes
-        role: 'user',
+      // Create a new request record
+      const request = new Request({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         headChefId: headChefId,
-        status: 'pending',
-        permissions: {
-          // Default view permissions for all resources
-          canViewRecipes: true,
-          canViewPlateups: true,
-          canViewNotifications: true,
-          canViewPanels: true,
-          // All other permissions remain false by default
-          canEditRecipes: false,
-          canDeleteRecipes: false,
-          canUpdateRecipes: false,
-          canCreatePlateups: false,
-          canDeletePlateups: false,
-          canUpdatePlateups: false,
-          canCreateNotifications: false,
-          canDeleteNotifications: false,
-          canUpdateNotifications: false,
-          canCreatePanels: false,
-          canDeletePanels: false,
-          canUpdatePanels: false,
-          canManageTeam: false,
-          canAccessAdmin: false,
-        },
+        status: 'pending'
       })
 
-      await chef.save()
+      await request.save()
+
+      console.log('✅ New team member request created:', {
+        requestId: request._id,
+        firstName: request.firstName,
+        lastName: request.lastName,
+        headChefId: request.headChefId
+      })
 
       res.status(201).json({ 
-        id: chef._id, 
-        status: chef.status, 
-        userId: chef._id 
+        id: request._id, 
+        status: request.status, 
+        requestId: request._id 
       })
     } catch (error) {
       console.error('Request chef access error:', error)

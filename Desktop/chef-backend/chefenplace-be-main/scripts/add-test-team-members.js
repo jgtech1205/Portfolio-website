@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../database/models/User');
 
-const MONGODB_URI = "mongodb+srv://ray:raytech@cluster0.u2chhqk.mongodb.net/chef-en-place";
 const HEAD_CHEF_ID = "687851455644fcb16f2fa339";
 
 const testTeamMembers = [

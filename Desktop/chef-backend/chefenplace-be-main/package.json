@@ -17,7 +17,9 @@
     "migrate:rollback": "node scripts/migrateUsers.js rollback",
     "backup:list": "node scripts/backupUsers.js list",
     "migrate:test": "node scripts/testMigration.js test",
-    "migrate:test-cleanup": "node scripts/testMigration.js cleanup"
+    "migrate:test-cleanup": "node scripts/testMigration.js cleanup",
+    "test:db": "node test-db-connection.js",
+    "test:pending-requests": "node scripts/test-pending-requests.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -1,55 +1,77 @@
 const express = require('express');
-const { body } = require('express-validator');
+const { body, validationResult } = require('express-validator');
 const router = express.Router();
 const restaurantController = require('../controllers/restaurantController');
 
-// Import CORS middleware
+// CORS middleware for Stripe endpoints
 const { stripeCorsHandler } = require('../middlewares/cors');
+
+// Database connection
+const { ensureConnection } = require('../database/connection');
+
+// --- Stripe initialization (used by /debug and /test-connection) ---
+let stripe = null;
+try {
+  const Stripe = require('stripe');
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+} catch (err) {
+  // leave stripe as null; /debug will report not configured
+}
+
+// Ensure DB connection for all routes (handles serverless cold starts)
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
 
 // Validation rules for Stripe checkout
 const stripeCheckoutValidation = [
-  body("planType").isIn(["pro", "enterprise"]).withMessage("Plan type must be pro or enterprise"),
-  body("billingCycle").isIn(["monthly", "yearly"]).withMessage("Billing cycle must be monthly or yearly"),
-  body("restaurantName").trim().isLength({ min: 1 }).withMessage("Restaurant name is required"),
-  body("headChefEmail").isEmail().normalizeEmail().withMessage("Valid email is required"),
-  body("headChefName").trim().isLength({ min: 1 }).withMessage("Head chef name is required"),
-  body("headChefPassword").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
-  body("restaurantType").trim().isLength({ min: 1 }).withMessage("Restaurant type is required"),
-  body("location").isObject().withMessage("Location object is required"),
-  body("success_url").optional().isURL().withMessage("Success URL must be a valid URL"),
-  body("cancel_url").optional().isURL().withMessage("Cancel URL must be a valid URL")
+  body('planType').isIn(['pro', 'enterprise']).withMessage('Plan type must be pro or enterprise'),
+  body('billingCycle').isIn(['monthly', 'yearly']).withMessage('Billing cycle must be monthly or yearly'),
+  body('restaurantName').trim().isLength({ min: 1 }).withMessage('Restaurant name is required'),
+  body('headChefEmail').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('headChefName').trim().isLength({ min: 1 }).withMessage('Head chef name is required'),
+  body('headChefPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('restaurantType').trim().isLength({ min: 1 }).withMessage('Restaurant type is required'),
+  body('location').isObject().withMessage('Location object is required'),
+  body('success_url').optional().isURL().withMessage('Success URL must be a valid URL'),
+  body('cancel_url').optional().isURL().withMessage('Cancel URL must be a valid URL'),
 ];
 
-// Handle OPTIONS requests for Stripe endpoints
+// Validator middleware
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  next();
+};
+
+// Handle OPTIONS requests for all endpoints (Stripe-friendly CORS preflight)
 router.options('*', (req, res) => {
   const origin = req.headers.origin;
   console.log(`🔄 Stripe OPTIONS request from: ${origin}`);
-  
-  // Set CORS headers for OPTIONS
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
+  if (origin) res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, stripe-signature, Accept, Origin');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Max-Age', '86400');
-  
   res.status(200).end();
 });
 
-// Handle OPTIONS for specific endpoints
+// Handle OPTIONS for specific endpoint (redundant but explicit)
 router.options('/create-checkout-session', (req, res) => {
   const origin = req.headers.origin;
   console.log(`🔄 Stripe checkout OPTIONS request from: ${origin}`);
-  
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
+  if (origin) res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, stripe-signature, Accept, Origin');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Max-Age', '86400');
-  
   res.status(200).end();
 });
 
@@ -57,11 +79,10 @@ router.options('/create-checkout-session', (req, res) => {
 router.get('/test', (req, res) => {
   const origin = req.headers.origin;
   console.log(`🧪 Stripe test endpoint called from: ${origin}`);
-  
   res.json({
     message: 'Stripe CORS test successful',
-    origin: origin,
-    timestamp: new Date().toISOString()
+    origin,
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -70,7 +91,7 @@ router.get('/verify-payment-test', (req, res) => {
   res.json({
     message: 'Verify payment endpoint is accessible',
     session_id: req.query.session_id,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -85,7 +106,7 @@ router.get('/debug', (req, res) => {
   const hasEnterpriseYearlyPrice = !!process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID;
   const hasFrontendUrl = !!process.env.FRONTEND_URL;
   const hasPriceIdMonthly = !!process.env.STRIPE_PRICE_ID_MONTHLY;
-  
+
   res.json({
     stripeConfigured,
     environment: {
@@ -99,9 +120,9 @@ router.get('/debug', (req, res) => {
       hasPriceIdMonthly,
       frontendUrl: process.env.FRONTEND_URL || 'NOT_SET',
       secretKeyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...' : 'NOT_SET',
-      priceIdMonthly: process.env.STRIPE_PRICE_ID_MONTHLY || 'NOT_SET'
+      priceIdMonthly: process.env.STRIPE_PRICE_ID_MONTHLY || 'NOT_SET',
     },
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -111,24 +132,21 @@ router.get('/test-connection', async (req, res) => {
     if (!stripe) {
       return res.status(500).json({
         error: 'Stripe not configured',
-        message: 'Stripe instance is null'
+        message: 'Stripe instance is null or STRIPE_SECRET_KEY is missing',
       });
     }
-    
-    // Test Stripe connection by making a simple API call
     const account = await stripe.accounts.retrieve();
-    
     res.json({
       success: true,
       message: 'Stripe connection successful',
       accountId: account.id,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     res.status(500).json({
       error: 'Stripe connection failed',
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -154,9 +172,6 @@ router.get('/test-connection', async (req, res) => {
  *               - headChefPassword
  *               - restaurantType
  *               - location
- *             optional:
- *               - success_url
- *               - cancel_url
  *             properties:
  *               planType:
  *                 type: string
@@ -180,23 +195,12 @@ router.get('/test-connection', async (req, res) => {
  *               success_url:
  *                 type: string
  *                 format: uri
- *                 description: Custom success URL (optional)
  *               cancel_url:
  *                 type: string
  *                 format: uri
- *                 description: Custom cancel URL (optional)
  *     responses:
  *       200:
  *         description: Checkout session created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 sessionId:
- *                   type: string
- *                 url:
- *                   type: string
  *       400:
  *         description: Validation failed or invalid plan
  *       409:
@@ -204,7 +208,13 @@ router.get('/test-connection', async (req, res) => {
  *       500:
  *         description: Stripe not configured or checkout error
  */
-router.post("/create-checkout-session", stripeCorsHandler, stripeCheckoutValidation, restaurantController.createCheckoutSession);
+router.post(
+  '/create-checkout-session',
+  stripeCorsHandler,
+  stripeCheckoutValidation,
+  validate,
+  restaurantController.createCheckoutSession
+);
 
 /**
  * @swagger
@@ -212,12 +222,6 @@ router.post("/create-checkout-session", stripeCorsHandler, stripeCheckoutValidat
  *   post:
  *     summary: Handle Stripe webhook events
  *     tags: [Stripe]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
  *     responses:
  *       200:
  *         description: Webhook processed successfully
@@ -226,7 +230,7 @@ router.post("/create-checkout-session", stripeCorsHandler, stripeCheckoutValidat
  *       500:
  *         description: Webhook processing failed
  */
-router.post("/webhook", stripeCorsHandler, restaurantController.webhook);
+router.post('/webhook', stripeCorsHandler, restaurantController.webhook);
 
 /**
  * @swagger
@@ -234,87 +238,11 @@ router.post("/webhook", stripeCorsHandler, restaurantController.webhook);
  *   get:
  *     summary: Verify payment and get session details
  *     tags: [Stripe]
- *     parameters:
- *       - in: query
- *         name: session_id
- *         required: true
- *         schema:
- *           type: string
- *         description: Stripe checkout session ID
- *     responses:
- *       200:
- *         description: Payment verified successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 session:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     payment_status:
- *                       type: string
- *                     customer_email:
- *                       type: string
- *                     metadata:
- *                       type: object
- *       400:
- *         description: Invalid session ID
- *       404:
- *         description: Session not found
- *       500:
- *         description: Server error
  *   post:
  *     summary: Verify payment and get session details (POST method)
  *     tags: [Stripe]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - session_id
- *             properties:
- *               session_id:
- *                 type: string
- *                 description: Stripe checkout session ID (snake_case)
- *               sessionId:
- *                 type: string
- *                 description: Stripe checkout session ID (camelCase, alternative)
- *     responses:
- *       200:
- *         description: Payment verified successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 session:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     payment_status:
- *                       type: string
- *                     customer_email:
- *                       type: string
- *                     metadata:
- *                       type: object
- *       400:
- *         description: Invalid session ID
- *       404:
- *         description: Session not found
- *       500:
- *         description: Server error
  */
-router.get("/verify-payment", stripeCorsHandler, restaurantController.verifyPayment);
-router.post("/verify-payment", stripeCorsHandler, restaurantController.verifyPayment);
+router.get('/verify-payment', stripeCorsHandler, restaurantController.verifyPayment);
+router.post('/verify-payment', stripeCorsHandler, restaurantController.verifyPayment);
 
 module.exports = router;

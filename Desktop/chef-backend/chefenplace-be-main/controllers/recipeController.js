@@ -12,7 +12,20 @@ const recipeController = {
   async getAllRecipes(req, res) {
     try {
       const { page = 1, limit = 10, search, panel } = req.query;
-      const query = { isActive: true };
+      
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔍 Getting recipes for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        restaurantId: req.headChefContext?.restaurantId
+      });
+
+      const query = { 
+        isActive: true,
+        headChefId: headChefId // Filter by restaurant
+      };
 
       if (search) {
         query.$or = [
@@ -56,8 +69,15 @@ const recipeController = {
     try {
       const { panelId } = req.params;
       const { page = 1, limit = 10 } = req.query;
+      
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
 
-      const recipes = await Recipe.find({ panel: panelId, isActive: true })
+      const recipes = await Recipe.find({ 
+        panel: panelId, 
+        isActive: true,
+        headChefId: headChefId // Filter by restaurant
+      })
         .populate('createdBy', 'name email')
         .sort({ createdAt: -1 })
         .limit(limit * 1)
@@ -66,6 +86,7 @@ const recipeController = {
       const total = await Recipe.countDocuments({
         panel: panelId,
         isActive: true,
+        headChefId: headChefId // Filter by restaurant
       });
 
       res.json({
@@ -88,7 +109,14 @@ const recipeController = {
   async searchRecipes(req, res) {
     try {
       const { q, difficulty, prepTime, cookTime } = req.query;
-      const query = { isActive: true };
+      
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      const query = { 
+        isActive: true,
+        headChefId: headChefId // Filter by restaurant
+      };
 
       if (q) {
         query.$or = [
@@ -178,6 +206,7 @@ const recipeController = {
       const recipe = new Recipe({
         title,
         panel,
+        headChefId: req.user.headChefId,
         image: imageData,
         ingredients,
         method,

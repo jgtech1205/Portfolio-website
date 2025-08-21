@@ -1,8 +1,19 @@
 const express = require("express")
 const { body } = require("express-validator")
 const restaurantController = require("../controllers/restaurantController")
+const { ensureConnection } = require("../database/connection")
 
 const router = express.Router()
+
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
 
 // Validation rules for restaurant signup
 const restaurantSignupValidation = [

@@ -2,13 +2,29 @@ const express = require("express")
 const { body } = require("express-validator")
 const recipeController = require("../controllers/recipeController")
 const { auth, teamAuth, organizationAuth, checkPermissionWithOrg } = require("../middlewares/auth")
+const { headChefAuth } = require("../middlewares/headChefAuth")
 const checkPermission = require("../middlewares/checkPermission")
+const { readOnlyAuth, checkReadOnlyPermission } = require("../middlewares/readOnlyAuth")
 const upload = require("../middlewares/upload")
+const { ensureConnection } = require("../database/connection")
 
 const router = express.Router()
 
+// Database connection middleware for all routes
+router.use(async (req, res, next) => {
+  try {
+    await ensureConnection();
+    next();
+  } catch (e) {
+    return res.status(503).json({ message: 'Database unavailable' });
+  }
+});
+
 // All routes require authentication
 router.use(auth)
+
+// Organization-based routes (allow both headchefs and their team members)
+router.use("/", readOnlyAuth)
 
 // Get all recipes
 /**
@@ -21,7 +37,7 @@ router.use(auth)
  *       200:
  *         description: List of recipes
  */
-router.get("/", checkPermission("canViewRecipes"), recipeController.getAllRecipes)
+router.get("/", checkReadOnlyPermission("canViewRecipes"), recipeController.getAllRecipes)
 
 // Get recipes by panel
 /**
@@ -42,7 +58,7 @@ router.get("/", checkPermission("canViewRecipes"), recipeController.getAllRecipe
  */
 router.get(
   "/panel/:panelId",
-  checkPermission("canViewRecipes"),
+  checkReadOnlyPermission("canViewRecipes"),
   recipeController.getRecipesByPanel,
 )
 
@@ -57,7 +73,7 @@ router.get(
  *       200:
  *         description: Search results
  */
-router.get("/search", checkPermission("canViewRecipes"), recipeController.searchRecipes)
+router.get("/search", checkReadOnlyPermission("canViewRecipes"), recipeController.searchRecipes)
 
 // Get single recipe
 /**
@@ -76,7 +92,7 @@ router.get("/search", checkPermission("canViewRecipes"), recipeController.search
  *       200:
  *         description: Recipe data
  */
-router.get("/:id", checkPermission("canViewRecipes"), recipeController.getRecipe)
+router.get("/:id", checkReadOnlyPermission("canViewRecipes"), recipeController.getRecipe)
 
 // Create recipe (requires edit permission)
 /**

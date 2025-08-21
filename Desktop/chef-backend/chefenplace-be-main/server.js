@@ -24,6 +24,7 @@ const plateUpRoutes = require('./routes/plateupRoutes');
 const plateupFolderRoutes = require('./routes/plateupFolderRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
+const billingRoutes = require('./routes/billingRoutes');
 
 const initHeadChef = async () => {
   const exists = await User.findOne({ role: 'head-chef' });
@@ -40,7 +41,12 @@ const initHeadChef = async () => {
       status: 'active',
     });
     await headChef.save();
-    console.log(`Auto-created Head Chef user: ${email}`);
+    
+    // Set headChefId to user's own _id
+    headChef.headChefId = headChef._id;
+    await headChef.save();
+    
+    console.log(`Auto-created Head Chef user: ${email} with headChefId: ${headChef.headChefId}`);
   }
 };
 
@@ -50,13 +56,15 @@ const app = express();
 validateEnvironment();
 
 // Connect to MongoDB (with error handling for serverless)
-try {
-  connectDB();
-  initHeadChef();
-} catch (error) {
-  console.error('Database connection error:', error.message);
-  // Don't exit in serverless environment, just log the error
-}
+(async () => {
+  try {
+    await connectDB();
+    await initHeadChef();
+  } catch (error) {
+    console.error('Database connection error:', error.message);
+    // Don't exit in serverless environment, just log the error
+  }
+})();
 
 // Security middleware
 app.use(helmet());
@@ -73,7 +81,19 @@ app.use('/api/stripe', stripeCorsHandler);
 // General middleware
 app.use(compression());
 app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
+
+// Conditional body parsing middleware
+// Use raw body for Stripe webhook, JSON for all other routes
+app.use((req, res, next) => {
+  if (req.path === '/api/stripe/webhook' && req.method === 'POST') {
+    // Use raw body for Stripe webhook
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    // Use JSON parsing for all other routes
+    express.json({ limit: '10mb' })(req, res, next);
+  }
+});
+
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
@@ -94,6 +114,7 @@ app.use('/api/plateups', plateUpRoutes);
 app.use('/api/plateup-folders', plateupFolderRoutes);
 app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Add routes without /api prefix for frontend compatibility

@@ -7,10 +7,24 @@ const panelController = {
   // Get all panels
   async getAllPanels(req, res) {
     try {
-      const panels = await Panel.find({ isActive: true })
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      console.log('🔍 Getting panels for head chef:', {
+        headChefId: headChefId,
+        userRole: req.user?.role,
+        restaurantId: req.headChefContext?.restaurantId
+      });
+
+      const panels = await Panel.find({ 
+        isActive: true,
+        headChefId: headChefId // Filter by restaurant
+      })
         .sort({ order: 1, createdAt: 1 })
         .populate('createdBy', 'name email')
         .populate('updatedBy', 'name email');
+
+      console.log(`✅ Found ${panels.length} panels for restaurant`);
 
       res.json({
         success: true,
@@ -25,11 +39,18 @@ const panelController = {
   // Get single panel
   async getPanel(req, res) {
     try {
-      const panel = await Panel.findById(req.params.id)
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      const panel = await Panel.findOne({ 
+        _id: req.params.id,
+        headChefId: headChefId, // Filter by restaurant
+        isActive: true
+      })
         .populate('createdBy', 'name email')
         .populate('updatedBy', 'name email');
 
-      if (!panel || !panel.isActive) {
+      if (!panel) {
         return res.status(404).json({ message: 'Panel not found' });
       }
 
@@ -63,14 +84,18 @@ const panelController = {
         };
       }
 
-      // Get the highest order number
-      const lastPanel = await Panel.findOne().sort({ order: -1 });
+      // Use headChefContext from headChefAuth middleware
+      const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+      
+      // Get the highest order number for this restaurant
+      const lastPanel = await Panel.findOne({ headChefId: headChefId }).sort({ order: -1 });
       const order = lastPanel ? lastPanel.order + 1 : 1;
 
       const panel = new Panel({
         name,
         image: imageData,
         order,
+        headChefId: headChefId, // Associate with restaurant
         createdBy: req.user.id,
       });
 

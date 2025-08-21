@@ -145,9 +145,28 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password)
 }
 
+// Set headChefId for head chefs
+userSchema.pre("save", function (next) {
+  // For head chefs, set headChefId to their own _id if not already set
+  if (this.role === "head-chef" && this._id && !this.headChefId) {
+    this.headChefId = this._id;
+  }
+  next();
+});
+
 // Set permissions based on role
 userSchema.pre("save", function (next) {
-  if (this.isModified("role")) {
+  console.log('🔧 Setting permissions for user:', {
+    isNew: this.isNew,
+    role: this.role,
+    hasPermissions: !!this.permissions,
+    canManageTeam: this.permissions?.canManageTeam
+  });
+
+  // Always set permissions for new users or when role is modified
+  if (this.isNew || this.isModified("role") || !this.permissions) {
+    console.log('   Setting permissions for role:', this.role);
+    
     switch (this.role) {
       case "head-chef":
         this.permissions = {
@@ -179,9 +198,72 @@ userSchema.pre("save", function (next) {
           canManageTeam: true,
           canAccessAdmin: true,
         }
+        console.log('   ✅ Head chef permissions set:', this.permissions);
         break;
+        
+      case "team-member":
+      case "user":
+        // Set default permissions for team members
+        this.permissions = {
+          // Recipe permissions - view only for team members
+          canViewRecipes: true,
+          canEditRecipes: false,
+          canDeleteRecipes: false,
+          canUpdateRecipes: false,
+
+          // Plateup permissions - view only for team members
+          canViewPlateups: true,
+          canCreatePlateups: false,
+          canDeletePlateups: false,
+          canUpdatePlateups: false,
+
+          // Notification permissions - view only for team members
+          canViewNotifications: true,
+          canCreateNotifications: false,
+          canDeleteNotifications: false,
+          canUpdateNotifications: false,
+
+          // Panel permissions - view only for team members
+          canViewPanels: true,
+          canCreatePanels: false,
+          canDeletePanels: false,
+          canUpdatePanels: false,
+
+          // Other permissions - no admin access for team members
+          canManageTeam: false,
+          canAccessAdmin: false,
+        }
+        console.log('   ✅ Team member permissions set:', this.permissions);
+        break;
+        
+      default:
+        console.log('   ⚠️ Unknown role:', this.role);
+        // Set minimal permissions for unknown roles
+        this.permissions = {
+          canViewRecipes: false,
+          canEditRecipes: false,
+          canDeleteRecipes: false,
+          canUpdateRecipes: false,
+          canViewPlateups: false,
+          canCreatePlateups: false,
+          canDeletePlateups: false,
+          canUpdatePlateups: false,
+          canViewNotifications: false,
+          canCreateNotifications: false,
+          canDeleteNotifications: false,
+          canUpdateNotifications: false,
+          canViewPanels: false,
+          canCreatePanels: false,
+          canDeletePanels: false,
+          canUpdatePanels: false,
+          canManageTeam: false,
+          canAccessAdmin: false,
+        }
     }
+  } else {
+    console.log('   ✅ Permissions already set correctly');
   }
+  
   next()
 })
 

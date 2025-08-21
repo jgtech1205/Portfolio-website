@@ -4,6 +4,7 @@ const mongoose = require("mongoose")
 const User = require("../database/models/User")
 const Restaurant = require("../database/models/Restaurant")
 const { generateHeadChefTokens } = require("../utils/tokenUtils")
+const { ensureConnection } = require("../database/connection")
 
 // URL validation helper function
 const isValidUrl = (string) => {
@@ -85,9 +86,6 @@ const restaurantController = {
         })
       }
 
-      // Generate unique headChefId
-      const headChefId = new mongoose.Types.ObjectId()
-
       // Hash password
       const salt = await bcrypt.genSalt(12)
       const hashedPassword = await bcrypt.hash(headChefPassword, salt)
@@ -100,7 +98,7 @@ const restaurantController = {
         lastName: "Head Chef",
         role: "head-chef",
         status: "active",
-        headChefId: headChefId,
+        // Don't set headChefId yet - we'll set it after save
         permissions: {
           canViewPanels: true,
           canViewRecipes: true,
@@ -125,12 +123,16 @@ const restaurantController = {
 
       await headChef.save()
 
+      // Now set headChefId to the user's own _id
+      headChef.headChefId = headChef._id
+      await headChef.save()
+
       // Create restaurant record
       const restaurant = new Restaurant({
         restaurantName,
         restaurantType,
         location,
-        headChefId: headChefId,
+        headChefId: headChef._id,
         planType,
         billingCycle,
         subscriptionStatus: planType === "trial" ? "active" : "inactive"
@@ -139,7 +141,7 @@ const restaurantController = {
       await restaurant.save()
 
       // Generate JWT tokens
-      const { accessToken, refreshToken } = generateHeadChefTokens(headChefId)
+      const { accessToken, refreshToken } = generateHeadChefTokens(headChef._id)
 
       // Return success response
       res.status(201).json({
@@ -191,6 +193,11 @@ const restaurantController = {
           code: "STRIPE_NOT_CONFIGURED"
         })
       }
+
+      // Ensure database connection is ready
+      const { ensureConnection } = require('../database/connection');
+      await ensureConnection();
+      console.log("✅ Database connection ready for Stripe checkout");
 
       const {
         planType,
@@ -369,6 +376,8 @@ const restaurantController = {
   // Verify payment and get session details
   async verifyPayment(req, res) {
     try {
+      await ensureConnection(); // <-- add this line
+      
       // Debug: Log the incoming request
       console.log('🔍 Verify payment request:', {
         method: req.method,
@@ -495,7 +504,7 @@ const restaurantController = {
           const restaurant = new Restaurant({
             restaurantName,
             restaurantType,
-            location: JSON.parse(location),
+            location: typeof location === 'string' ? JSON.parse(location) : location,
             headChefId: headChef._id, // Use the user's _id as headChefId
             planType,
             billingCycle,
@@ -530,7 +539,12 @@ const restaurantController = {
         userId: existingUser?._id,
         restaurantId: existingRestaurant?._id,
         userRole: existingUser?.role,
-        userStatus: existingUser?.status
+        userStatus: existingUser?.status,
+        userHeadChefId: existingUser?.headChefId,
+        restaurantHeadChefId: existingRestaurant?.headChefId,
+        headChefIdMatch: existingUser?.headChefId?.toString() === existingRestaurant?.headChefId?.toString(),
+        userEmail: existingUser?.email,
+        restaurantName: existingRestaurant?.restaurantName
       });
 
       // Return response in format expected by frontend
@@ -566,11 +580,42 @@ const restaurantController = {
             accessTokenLength: accessToken?.length
           });
           
+          // Ensure the user object includes all necessary fields for frontend
+          const userResponse = {
+            _id: existingUser._id,
+            email: existingUser.email,
+            firstName: existingUser.firstName,
+            lastName: existingUser.lastName,
+            role: existingUser.role,
+            status: existingUser.status,
+            headChefId: existingUser.headChefId,
+            permissions: existingUser.permissions,
+            preferences: existingUser.preferences,
+            restaurantId: existingRestaurant?._id, // Add restaurant ID
+            restaurantName: existingRestaurant?.restaurantName // Add restaurant name
+          };
+          
           response.data = {
-            user: existingUser,
+            user: userResponse,
             accessToken,
             refreshToken
           };
+
+          // Include full restaurant data if it exists
+          if (existingRestaurant) {
+            response.data.restaurant = {
+              id: existingRestaurant._id,
+              restaurantName: existingRestaurant.restaurantName,
+              restaurantType: existingRestaurant.restaurantType,
+              location: existingRestaurant.location,
+              planType: existingRestaurant.planType,
+              billingCycle: existingRestaurant.billingCycle,
+              subscriptionStatus: existingRestaurant.subscriptionStatus,
+              trialEndDate: existingRestaurant.trialEndDate,
+              stripeCustomerId: existingRestaurant.stripeCustomerId,
+              stripeSubscriptionId: existingRestaurant.stripeSubscriptionId
+            };
+          }
           
           console.log('✅ Successfully created response with tokens');
         } catch (tokenError) {
@@ -717,9 +762,6 @@ async function handleCheckoutSessionCompleted(session) {
       return
     }
 
-    // Generate unique headChefId
-    const headChefId = new mongoose.Types.ObjectId()
-
     // Hash password
     const salt = await bcrypt.genSalt(12)
     const hashedPassword = await bcrypt.hash(headChefPassword, salt)
@@ -732,7 +774,7 @@ async function handleCheckoutSessionCompleted(session) {
       lastName: "Head Chef",
       role: "head-chef",
       status: "active",
-      headChefId: headChefId,
+      // Don't set headChefId yet - we'll set it after save
       permissions: {
         canViewPanels: true,
         canViewRecipes: true,
@@ -757,12 +799,16 @@ async function handleCheckoutSessionCompleted(session) {
 
     await headChef.save()
 
+    // Now set headChefId to the user's own _id
+    headChef.headChefId = headChef._id
+    await headChef.save()
+
     // Create restaurant record
     const restaurant = new Restaurant({
       restaurantName,
       restaurantType,
-      location: JSON.parse(location),
-      headChefId: headChefId,
+      location: typeof location === 'string' ? JSON.parse(location) : location,
+      headChefId: headChef._id,
       planType,
       billingCycle,
       subscriptionStatus: "active",
@@ -771,6 +817,16 @@ async function handleCheckoutSessionCompleted(session) {
     })
 
     await restaurant.save()
+
+    console.log('✅ Webhook: Restaurant created successfully:', {
+      restaurantId: restaurant._id,
+      restaurantName: restaurant.restaurantName,
+      headChefId: restaurant.headChefId,
+      userHeadChefId: headChef.headChefId,
+      userEmail: headChef.email,
+      planType: restaurant.planType,
+      subscriptionStatus: restaurant.subscriptionStatus
+    });
 
     // Send welcome email (implement email service)
     console.log(`Restaurant ${restaurantName} created successfully for ${headChefEmail}`)
