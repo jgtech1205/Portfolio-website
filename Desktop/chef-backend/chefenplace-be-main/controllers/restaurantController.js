@@ -245,6 +245,121 @@ const restaurantController = {
         })
       }
 
+      // Create user and restaurant immediately for all signups
+      console.log('🔍 Creating user and restaurant immediately for signup...');
+      
+      // Ensure database connection is ready
+      await ensureConnection();
+      console.log('✅ Database connection ready for user/restaurant creation');
+      
+      let headChef, restaurant;
+      try {
+        // Hash password
+        const salt = await bcrypt.genSalt(12);
+        const hashedPassword = await bcrypt.hash(headChefPassword, salt);
+
+        // Split headChefName into firstName and lastName
+        const nameParts = headChefName.trim().split(' ');
+        const firstName = nameParts[0] || headChefName;
+        const lastName = nameParts.slice(1).join(' ') || 'Head Chef';
+
+        // Create head chef user
+        headChef = new User({
+          email: headChefEmail,
+          password: hashedPassword,
+          firstName: firstName,
+          lastName: lastName,
+          name: headChefName, // Keep the full name as well
+          role: "head-chef",
+          status: "active",
+          permissions: {
+            canViewPanels: true,
+            canViewRecipes: true,
+            canViewPlateups: true,
+            canViewNotifications: true,
+            canManageTeam: true,
+            canCreateNotifications: true,
+            canEditRecipes: true,
+            canDeleteRecipes: true,
+            canUpdateRecipes: true,
+            canCreatePlateups: true,
+            canDeletePlateups: true,
+            canUpdatePlateups: true,
+            canDeleteNotifications: true,
+            canUpdateNotifications: true,
+            canCreatePanels: true,
+            canDeletePanels: true,
+            canUpdatePanels: true,
+            canAccessAdmin: true
+          }
+        });
+
+        await headChef.save();
+        console.log('✅ User created successfully:', headChef._id);
+
+        // Set headChefId to user's own _id
+        headChef.headChefId = headChef._id;
+        await headChef.save();
+        console.log('✅ headChefId set successfully');
+
+        // Create restaurant record immediately
+        restaurant = new Restaurant({
+          restaurantName,
+          restaurantType,
+          location,
+          headChefId: headChef._id,
+          planType,
+          billingCycle,
+          subscriptionStatus: planType === "trial" ? "active" : "inactive", // Use valid enum values
+          isActive: true
+        });
+
+        await restaurant.save();
+        console.log('✅ Restaurant created successfully:', restaurant._id);
+
+        // Verify both were created successfully
+        const verifyUser = await User.findById(headChef._id);
+        const verifyRestaurant = await Restaurant.findOne({ headChefId: headChef._id });
+        
+        if (!verifyUser || !verifyRestaurant) {
+          throw new Error('User or restaurant creation verification failed');
+        }
+
+        console.log('✅ User and restaurant created and verified:', {
+          userId: headChef._id,
+          restaurantId: restaurant._id,
+          restaurantName: restaurant.restaurantName,
+          planType: planType,
+          subscriptionStatus: restaurant.subscriptionStatus
+        });
+
+      } catch (error) {
+        console.error('❌ Error creating user/restaurant during signup:', error);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          code: error.code
+        });
+        
+        // If user was created but restaurant failed, try to clean up
+        if (headChef && !restaurant) {
+          try {
+            console.log('🔄 Cleaning up orphaned user...');
+            await User.findByIdAndDelete(headChef._id);
+            console.log('✅ Orphaned user cleaned up');
+          } catch (cleanupError) {
+            console.error('❌ Failed to clean up orphaned user:', cleanupError.message);
+          }
+        }
+        
+        return res.status(500).json({
+          message: "Failed to create user and restaurant",
+          code: "CREATION_ERROR",
+          details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+      }
+
       // Define price IDs based on plan and billing cycle with fallbacks
       const priceIds = {
         pro: {
@@ -281,11 +396,13 @@ const restaurantController = {
         restaurantName,
         restaurantType,
         location: JSON.stringify(location),
+        restaurantId: restaurant._id.toString(),
         
         // User information
         headChefEmail,
         headChefName,
         headChefPassword,
+        userId: headChef._id.toString(),
         
         // Plan information
         planType,
@@ -443,8 +560,75 @@ const restaurantController = {
       let existingUser = await User.findOne({ email: session.customer_email });
       let existingRestaurant = existingUser ? await Restaurant.findOne({ headChefId: existingUser._id }) : null;
       
-      // If payment is successful but user doesn't exist, create them immediately
-      if (session.payment_status === 'paid' && !existingUser && session.metadata) {
+      // If user and restaurant already exist, update the restaurant with Stripe data
+      if (session.payment_status === 'paid' && existingUser && existingRestaurant && session.metadata) {
+        console.log('🔄 Payment successful, updating existing restaurant with Stripe data...');
+        
+        try {
+          // Update restaurant with Stripe customer and subscription IDs
+          existingRestaurant.stripeCustomerId = session.customer;
+          existingRestaurant.stripeSubscriptionId = session.subscription;
+          existingRestaurant.subscriptionStatus = "active"; // This is a valid enum value
+          await existingRestaurant.save();
+          
+          console.log('✅ Restaurant updated with Stripe data:', {
+            restaurantId: existingRestaurant._id,
+            stripeCustomerId: existingRestaurant.stripeCustomerId,
+            stripeSubscriptionId: existingRestaurant.stripeSubscriptionId,
+            subscriptionStatus: existingRestaurant.subscriptionStatus
+          });
+          
+        } catch (error) {
+          console.error('❌ Error updating restaurant with Stripe data:', error);
+        }
+        
+        // If payment is successful, user exists but restaurant doesn't exist, create restaurant (missing case)
+        else if (session.payment_status === 'paid' && existingUser && !existingRestaurant && session.metadata) {
+        console.log('🔄 Payment successful, user exists but restaurant missing, creating restaurant...');
+        
+        try {
+          const {
+            restaurantName,
+            headChefEmail,
+            headChefName,
+            headChefPassword,
+            restaurantType,
+            location,
+            planType,
+            billingCycle
+          } = session.metadata;
+
+          // Create restaurant record for existing user
+          const restaurant = new Restaurant({
+            restaurantName,
+            restaurantType,
+            location: typeof location === 'string' ? JSON.parse(location) : location,
+            headChefId: existingUser._id,
+            planType,
+            billingCycle,
+            subscriptionStatus: "active",
+            stripeCustomerId: session.customer,
+            stripeSubscriptionId: session.subscription
+          });
+
+          await restaurant.save();
+
+          console.log('✅ Restaurant created for existing user:', {
+            restaurantId: restaurant._id,
+            restaurantName: restaurant.restaurantName,
+            headChefId: restaurant.headChefId,
+            userId: existingUser._id
+          });
+          
+          // Update our reference
+          existingRestaurant = restaurant;
+          
+        } catch (error) {
+          console.error('❌ Error creating restaurant for existing user:', error);
+        }
+        
+      // If payment is successful but user doesn't exist, create them immediately (fallback)
+      else if (session.payment_status === 'paid' && !existingUser && session.metadata) {
         console.log('🔄 Payment successful but user not found, creating user immediately...');
         
         try {

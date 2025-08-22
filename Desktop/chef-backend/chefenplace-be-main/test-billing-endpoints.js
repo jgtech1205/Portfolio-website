@@ -2,8 +2,8 @@ const axios = require('axios');
 
 // Configuration
 const API_BASE = 'https://chef-app-backend.vercel.app/api';
-const TEST_EMAIL = 'test@example.com'; // Replace with actual test head chef email
-const TEST_PASSWORD = 'testpassword123'; // Replace with actual test password
+const TEST_EMAIL = 'testheadcdfgahef@kitchen.com@example.com'; // Replace with actual test head chef email
+const TEST_PASSWORD = 'Bball12!'; // Replace with actual test password
 
 // Test data
 let accessToken = null;

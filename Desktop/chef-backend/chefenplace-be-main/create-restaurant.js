@@ -10,7 +10,7 @@ async function createRestaurant() {
     console.log('✅ Connected to database');
 
     // Your head chef's ID from the console
-    const headChefId = '68a4dd4a0310aa85d34c9c91';
+    const headChefId = '68a7ab1dac48fff100c91ed0';
 
     // Check if restaurant already exists
     const existingRestaurant = await Restaurant.findOne({ headChefId });
