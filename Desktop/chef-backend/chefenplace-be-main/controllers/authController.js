@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
+const bcrypt = require("bcryptjs")
 const { validationResult } = require("express-validator")
 const User = require("../database/models/User")
 const Request = require("../database/models/Request")
@@ -26,26 +27,70 @@ const authController = {
         return handleAuthError(req, res, 'MISSING_CREDENTIALS', null, inputValidation.errors.join(', '))
       }
 
-      // Find user
-      const user = await User.findOne({ email: inputValidation.sanitizedUsername })
-      if (!user) {
-        return handleAuthError(req, res, 'USER_NOT_FOUND', null)
-      }
+      console.log('🔍 Login attempt for email:', inputValidation.sanitizedUsername)
 
-      // Check password
-      const isMatch = await user.comparePassword(inputValidation.sanitizedPassword)
-      if (!isMatch) {
-        return handleAuthError(req, res, 'INVALID_CREDENTIALS', user)
+      // Find user with explicit error handling
+      let user
+      try {
+        user = await User.findOne({ email: inputValidation.sanitizedUsername })
+        if (!user) {
+          console.log('❌ User not found in database')
+          return handleAuthError(req, res, 'USER_NOT_FOUND', null)
+        }
+        console.log('✅ User found:', { id: user._id, email: user.email, role: user.role, status: user.status })
+      } catch (dbError) {
+        console.error('❌ Database error during user lookup:', dbError)
+        return res.status(500).json({ 
+          message: 'Database error occurred',
+          code: 'DATABASE_ERROR'
+        })
       }
 
       // Check if user is active/approved
       if (user.status !== "approved" && user.status !== "active") {
+        console.log('❌ User not approved/active:', user.status)
         return handleAuthError(req, res, 'USER_NOT_APPROVED', user)
       }
 
+      // Explicit bcrypt password comparison
+      console.log('🔍 Checking password...')
+      let isMatch
+      try {
+        // Check if stored password is a bcrypt hash
+        if (!user.password.startsWith('$2a$') && !user.password.startsWith('$2b$') && !user.password.startsWith('$2y$')) {
+          console.error('❌ Stored password is not a bcrypt hash:', user.password.substring(0, 10) + '...')
+          return res.status(500).json({ 
+            message: 'Password format error',
+            code: 'PASSWORD_FORMAT_ERROR'
+          })
+        }
+        
+        isMatch = await bcrypt.compare(inputValidation.sanitizedPassword, user.password)
+        console.log('🔍 Password match result:', isMatch)
+      } catch (bcryptError) {
+        console.error('❌ Bcrypt comparison error:', bcryptError)
+        return res.status(500).json({ 
+          message: 'Password verification error',
+          code: 'PASSWORD_VERIFICATION_ERROR'
+        })
+      }
+
+      if (!isMatch) {
+        console.log('❌ Password mismatch')
+        return handleAuthError(req, res, 'INVALID_CREDENTIALS', user)
+      }
+
+      console.log('✅ Password verified successfully')
+
       // Update last login
-      user.lastLogin = new Date()
-      await user.save()
+      try {
+        user.lastLogin = new Date()
+        await user.save()
+        console.log('✅ Last login updated')
+      } catch (saveError) {
+        console.error('❌ Error updating last login:', saveError)
+        // Don't fail login for this, just log the error
+      }
 
       // Clear failed attempts for this IP after successful login
       const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for']
@@ -56,9 +101,10 @@ const authController = {
         ? generateHeadChefTokens(user._id)
         : generateTeamTokens(user._id, user.headChefId, user.role)
 
+      console.log('✅ Login successful, tokens generated')
       res.status(HTTP_STATUS.OK).json(authSuccessResponse(user, accessToken, refreshToken))
     } catch (error) {
-      console.error("Login error:", error)
+      console.error("❌ Login error:", error)
       handleAuthError(req, res, 'SYSTEM_ERROR', null, 'System error occurred')
     }
   },
@@ -143,8 +189,6 @@ const authController = {
       }
 
       // Create new user with role "head-chef" - permissions will be set by pre-save hook
-      console.log('🔍 Creating new head chef user:', { email: finalEmail, name: finalName });
-      
       const user = new User({
         email: finalEmail,
         password: finalPassword, // Will be hashed by pre-save hook
@@ -156,25 +200,11 @@ const authController = {
         // Don't set permissions here - let the pre-save hook handle it
       })
 
-      console.log('💾 Saving user to database...');
-      try {
-        await user.save()
-        console.log('✅ User saved successfully with ID:', user._id);
-      } catch (saveError) {
-        console.error('❌ Error saving user to database:', saveError);
-        throw saveError;
-      }
+      await user.save()
 
       // Now set headChefId to the user's own _id
-      console.log('🔗 Setting headChefId to user ID...');
-      try {
-        user.headChefId = user._id
-        await user.save()
-        console.log('✅ HeadChefId set successfully');
-      } catch (headChefIdError) {
-        console.error('❌ Error setting headChefId:', headChefIdError);
-        throw headChefIdError;
-      }
+      user.headChefId = user._id
+      await user.save()
 
       // Create restaurant record if restaurant information is provided
       let restaurant = null

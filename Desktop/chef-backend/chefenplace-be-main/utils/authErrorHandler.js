@@ -10,17 +10,25 @@ const securityConfig = getSecurityConfig()
 const failedLoginAttempts = new Map()
 
 /**
+ * Custom IP extractor for rate limiting
+ */
+const clientIp = (req) => {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.length) {
+    return xff.split(",")[0].trim();
+  }
+  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+};
+
+/**
  * Rate limiter for login attempts
  */
 const loginRateLimiter = rateLimit({
   windowMs: rateLimitConfig.rateLimitWindowMs,
   max: rateLimitConfig.loginRateLimit,
-  message: {
-    error: 'Too many login attempts. Please try again later.',
-    retryAfter: `${Math.floor(rateLimitConfig.rateLimitWindowMs / 60000)} minutes`
-  },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => clientIp(req),
   handler: (req, res) => {
     logFailedLoginAttempt(req, 'RATE_LIMIT_EXCEEDED', null)
     res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
@@ -37,12 +45,9 @@ const loginRateLimiter = rateLimit({
 const teamLoginRateLimiter = rateLimit({
   windowMs: rateLimitConfig.rateLimitWindowMs,
   max: rateLimitConfig.teamLoginRateLimit,
-  message: {
-    error: 'Too many team login attempts. Please try again later.',
-    retryAfter: `${Math.floor(rateLimitConfig.rateLimitWindowMs / 60000)} minutes`
-  },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => clientIp(req),
   handler: (req, res) => {
     logFailedLoginAttempt(req, 'TEAM_RATE_LIMIT_EXCEEDED', null)
     res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({

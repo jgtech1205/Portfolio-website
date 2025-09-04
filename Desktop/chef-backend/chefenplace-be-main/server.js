@@ -52,8 +52,8 @@ const initHeadChef = async () => {
 
 const app = express();
 
-// Trust proxy for Vercel deployment (required for rate limiting)
-app.set('trust proxy', true);
+// Trust proxy for Vercel/Cloudflare/ALB - MUST be first
+app.set("trust proxy", true);
 
 // Validate environment configuration
 validateEnvironment();
