@@ -139,6 +139,12 @@ router.put(
   "/:id",
   checkPermission("canUpdateRecipes"),
   upload.single("image"),
+  [
+    body("title").optional().trim().isLength({ min: 1 }),
+    body("panel").optional().isMongoId(),
+    body("method").optional().trim().isLength({ min: 1 }),
+    body("chefNotes").optional().trim(),
+  ],
   recipeController.updateRecipe,
 )
 

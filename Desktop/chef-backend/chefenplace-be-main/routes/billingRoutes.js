@@ -6,7 +6,7 @@ const billingController = require('../controllers/billingController');
 // Import middleware
 const { auth } = require('../middlewares/auth');
 const { headChefAuth } = require('../middlewares/headChefAuth');
-const { ensureHeadChefHasRestaurant } = require('../add-restaurant-safety-check');
+// const { ensureHeadChefHasRestaurant } = require('../add-restaurant-safety-check');
 
 // Database connection
 const { ensureConnection } = require('../database/connection');
@@ -31,7 +31,7 @@ const validate = (req, res, next) => {
 // All billing routes require authentication and head chef role
 router.use(auth);
 router.use(headChefAuth);
-router.use(ensureHeadChefHasRestaurant); // Ensure all head chefs have restaurants
+// router.use(ensureHeadChefHasRestaurant); // Ensure all head chefs have restaurants
 
 /**
  * @swagger

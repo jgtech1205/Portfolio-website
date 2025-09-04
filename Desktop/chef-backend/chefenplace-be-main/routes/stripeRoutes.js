@@ -54,7 +54,7 @@ const validate = (req, res, next) => {
 // Handle OPTIONS requests for all endpoints (Stripe-friendly CORS preflight)
 router.options('*', (req, res) => {
   const origin = req.headers.origin;
-  console.log(`🔄 Stripe OPTIONS request from: ${origin}`);
+      // console.log(`🔄 Stripe OPTIONS request from: ${origin}`);
   if (origin) res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, stripe-signature, Accept, Origin');
@@ -66,7 +66,7 @@ router.options('*', (req, res) => {
 // Handle OPTIONS for specific endpoint (redundant but explicit)
 router.options('/create-checkout-session', (req, res) => {
   const origin = req.headers.origin;
-  console.log(`🔄 Stripe checkout OPTIONS request from: ${origin}`);
+      // console.log(`🔄 Stripe checkout OPTIONS request from: ${origin}`);
   if (origin) res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, stripe-signature, Accept, Origin');
@@ -78,7 +78,7 @@ router.options('/create-checkout-session', (req, res) => {
 // Test endpoint to verify CORS is working
 router.get('/test', (req, res) => {
   const origin = req.headers.origin;
-  console.log(`🧪 Stripe test endpoint called from: ${origin}`);
+      // console.log(`🧪 Stripe test endpoint called from: ${origin}`);
   res.json({
     message: 'Stripe CORS test successful',
     origin,
@@ -95,61 +95,9 @@ router.get('/verify-payment-test', (req, res) => {
   });
 });
 
-// Debug endpoint to check Stripe configuration
-router.get('/debug', (req, res) => {
-  const stripeConfigured = !!stripe;
-  const hasSecretKey = !!process.env.STRIPE_SECRET_KEY;
-  const hasWebhookSecret = !!process.env.STRIPE_WEBHOOK_SECRET;
-  const hasProMonthlyPrice = !!process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
-  const hasProYearlyPrice = !!process.env.STRIPE_PRO_YEARLY_PRICE_ID;
-  const hasEnterpriseMonthlyPrice = !!process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID;
-  const hasEnterpriseYearlyPrice = !!process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID;
-  const hasFrontendUrl = !!process.env.FRONTEND_URL;
-  const hasPriceIdMonthly = !!process.env.STRIPE_PRICE_ID_MONTHLY;
 
-  res.json({
-    stripeConfigured,
-    environment: {
-      hasSecretKey,
-      hasWebhookSecret,
-      hasProMonthlyPrice,
-      hasProYearlyPrice,
-      hasEnterpriseMonthlyPrice,
-      hasEnterpriseYearlyPrice,
-      hasFrontendUrl,
-      hasPriceIdMonthly,
-      frontendUrl: process.env.FRONTEND_URL || 'NOT_SET',
-      secretKeyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 7) + '...' : 'NOT_SET',
-      priceIdMonthly: process.env.STRIPE_PRICE_ID_MONTHLY || 'NOT_SET',
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
 
-// Test Stripe connection endpoint
-router.get('/test-connection', async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({
-        error: 'Stripe not configured',
-        message: 'Stripe instance is null or STRIPE_SECRET_KEY is missing',
-      });
-    }
-    const account = await stripe.accounts.retrieve();
-    res.json({
-      success: true,
-      message: 'Stripe connection successful',
-      accountId: account.id,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Stripe connection failed',
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+
 
 /**
  * @swagger

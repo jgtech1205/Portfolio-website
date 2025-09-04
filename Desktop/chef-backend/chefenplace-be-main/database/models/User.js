@@ -113,6 +113,17 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Stripe integration fields
+    stripeCustomerId: {
+      type: String,
+      default: null,
+      index: true, // Index for efficient Stripe lookups
+    },
+    stripeSubscriptionId: {
+      type: String,
+      default: null,
+      index: true, // Index for efficient Stripe lookups
+    },
   },
   {
     timestamps: true,

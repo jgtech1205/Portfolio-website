@@ -271,4 +271,50 @@ router.get("/status/:id", userController.getUserStatus)
 router.get("/profile/id/:id", userController.getProfileById)
 router.get("/saved-recipes", userController.getSavedRecipes)
 
+// Head chef organization endpoint
+/**
+ * @swagger
+ * /api/users/head-chefs/{headChefId}:
+ *   get:
+ *     summary: Get head chef organization information
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: headChefId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Head chef user ID
+ *     responses:
+ *       200:
+ *         description: Head chef organization information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     organization:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *       404:
+ *         description: Head chef not found
+ *       500:
+ *         description: Server error
+ */
+router.get("/head-chefs/:headChefId", userController.getHeadChefOrganization)
+
 module.exports = router

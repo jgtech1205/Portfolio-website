@@ -16,6 +16,11 @@ const requestSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  organization: {
+    type: String,
+    trim: true,
+    required: true
+  },
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

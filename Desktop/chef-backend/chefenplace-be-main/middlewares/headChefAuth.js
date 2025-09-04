@@ -66,13 +66,13 @@ const headChefAuth = async (req, res, next) => {
       permissions: user.permissions
     }
 
-    console.log('🔐 Head chef authenticated:', {
-      userId: user._id,
-      restaurantId: restaurant?._id || null,
-      restaurantName: restaurant?.restaurantName || 'No Restaurant',
-      email: user.email,
-      permissions: user.permissions
-    })
+    // console.log('🔐 Head chef authenticated:', {
+    //   userId: user._id,
+    //   restaurantId: restaurant?._id || null,
+    //   restaurantName: restaurant?.restaurantName || 'No Restaurant',
+    //   email: user.email,
+    //   permissions: user.permissions
+    // })
 
     next()
   } catch (error) {

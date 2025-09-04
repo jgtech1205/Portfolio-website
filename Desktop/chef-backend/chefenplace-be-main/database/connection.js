@@ -40,21 +40,21 @@ const connectWithRetry = async () => {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(
-        `🔌 Attempting to connect to MongoDB... (attempt ${attempt}/${maxRetries})`
-      );
-      console.log(
-        `📍 MongoDB URI: ${mongoUri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")}`
-      ); // Hide credentials
+      // console.log(
+      //   `🔌 Attempting to connect to MongoDB... (attempt ${attempt}/${maxRetries})`
+      // );
+      // console.log(
+      //   `📍 MongoDB URI: ${mongoUri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")}`
+      // ); // Hide credentials
 
       const conn = await mongoose.connect(mongoUri, connectionOptions);
 
-      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-      console.log(`🔗 Database name: ${conn.connection.name}`);
+      // console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+      // console.log(`🔗 Database name: ${conn.connection.name}`);
 
       // Safely log pool size if available
       if (conn.connection.pool && typeof conn.connection.pool.size === "function") {
-        console.log(`📊 Connection pool size: ${conn.connection.pool.size()}`);
+        // console.log(`📊 Connection pool size: ${conn.connection.pool.size()}`);
       }
 
       isConnecting = false;
@@ -77,7 +77,7 @@ const connectWithRetry = async () => {
 
       // Exponential backoff
       const delay = retryDelay * Math.pow(2, attempt - 1);
-      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      // console.log(`⏳ Waiting ${delay}ms before retry...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -129,25 +129,25 @@ const initializeDatabase = async () => {
     });
 
     mongoose.connection.on("disconnected", () => {
-      console.log("🔌 MongoDB disconnected");
+      // console.log("🔌 MongoDB disconnected");
       connectionPromise = null; // Reset promise to allow reconnection
     });
 
     mongoose.connection.on("reconnected", () => {
-      console.log("🔄 MongoDB reconnected");
+      // console.log("🔄 MongoDB reconnected");
     });
 
     mongoose.connection.on("connected", () => {
-      console.log("✅ MongoDB connected");
+      // console.log("✅ MongoDB connected");
     });
 
     // Graceful shutdown (only for non-serverless environments)
     if (!process.env.VERCEL) {
       process.on("SIGINT", async () => {
-        console.log("🛑 Shutting down gracefully...");
+        // console.log("🛑 Shutting down gracefully...");
         try {
           await mongoose.connection.close();
-          console.log("✅ MongoDB connection closed through app termination");
+          // console.log("✅ MongoDB connection closed through app termination");
           process.exit(0);
         } catch (error) {
           console.error("❌ Error closing MongoDB connection:", error);
@@ -162,9 +162,9 @@ const initializeDatabase = async () => {
     console.error("❌ Database initialization error:", error.message);
     // Don't exit in serverless environment
     if (process.env.VERCEL || process.env.NODE_ENV === "production") {
-      console.log(
-        "Continuing without database connection in serverless environment"
-      );
+      // console.log(
+      //   "Continuing without database connection in serverless environment"
+      // );
     } else {
       throw error;
     }

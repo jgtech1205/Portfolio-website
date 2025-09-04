@@ -103,7 +103,7 @@ const validateEnvironment = () => {
     })
   }
 
-  console.log('✅ Environment configuration validated')
+  // console.log('✅ Environment configuration validated')
 }
 
 /**

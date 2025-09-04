@@ -46,7 +46,7 @@ const initHeadChef = async () => {
     headChef.headChefId = headChef._id;
     await headChef.save();
     
-    console.log(`Auto-created Head Chef user: ${email} with headChefId: ${headChef.headChefId}`);
+    // console.log(`Auto-created Head Chef user: ${email} with headChefId: ${headChef.headChefId}`);
   }
 };
 
@@ -98,7 +98,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  // console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
@@ -126,7 +126,7 @@ app.use('/plateups', plateUpRoutes);
 app.use('/recipes', recipeRoutes);
 app.use('/notifications', notificationRoutes);
 
-// Basic health check
+// Basic health check - Updated for Vercel deployment
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -170,13 +170,7 @@ app.get('/api/health/detailed', async (req, res) => {
   }
 });
 
-// Test route
-app.get('/api/test', (req, res) => {
-  res.status(200).json({
-    message: 'Test endpoint working',
-    timestamp: new Date().toISOString(),
-  });
-});
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -184,7 +178,7 @@ app.use((err, req, res, next) => {
   
   // Handle CORS errors specifically
   if (err.message === 'Not allowed by CORS') {
-    console.log(`❌ CORS Error: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
+    // console.log(`❌ CORS Error: ${req.method} ${req.path} from origin: ${req.headers.origin}`);
     return res.status(403).json({ 
       message: 'CORS policy violation',
       error: 'Origin not allowed',

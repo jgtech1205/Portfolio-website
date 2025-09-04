@@ -4,6 +4,7 @@ const Request = require('../database/models/Request');
 const Notification = require('../database/models/Notification');
 const { uploadImage, deleteImage } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 const userController = {
   // Get user profile
@@ -484,7 +485,7 @@ const userController = {
         return res.status(400).json({ errors: errors.array() })
       }
 
-      const { headChefId, firstName, lastName } = req.body
+      const { headChefId, firstName, lastName, organization } = req.body
 
       const headChef = await User.findOne({ _id: headChefId, role: 'head-chef' })
       if (!headChef) {
@@ -507,11 +508,12 @@ const userController = {
         })
       }
 
-      // Create a new request record
+      // Create a new request record with organization
       const request = new Request({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         headChefId: headChefId,
+        organization: organization || headChef.organization || 'Default Organization',
         status: 'pending'
       })
 
@@ -521,7 +523,8 @@ const userController = {
         requestId: request._id,
         firstName: request.firstName,
         lastName: request.lastName,
-        headChefId: request.headChefId
+        headChefId: request.headChefId,
+        organization: request.organization
       })
 
       res.status(201).json({ 
@@ -571,6 +574,62 @@ const userController = {
     } catch (error) {
       console.error('Get saved recipes error:', error);
       res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  // Get head chef organization information
+  async getHeadChefOrganization(req, res) {
+    try {
+      const { headChefId } = req.params;
+
+      // Validate headChefId
+      if (!mongoose.Types.ObjectId.isValid(headChefId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid head chef ID',
+          code: 'INVALID_HEAD_CHEF_ID'
+        });
+      }
+
+      // Find the head chef
+      const headChef = await User.findOne({
+        _id: headChefId,
+        role: 'head-chef'
+      }).select('firstName lastName name organization role');
+
+      if (!headChef) {
+        return res.status(404).json({
+          success: false,
+          message: 'Head chef not found',
+          code: 'HEAD_CHEF_NOT_FOUND'
+        });
+      }
+
+      console.log('✅ Head chef organization retrieved:', {
+        headChefId: headChef._id,
+        organization: headChef.organization,
+        name: headChef.name
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          id: headChef._id,
+          firstName: headChef.firstName,
+          lastName: headChef.lastName,
+          name: headChef.name,
+          organization: headChef.organization,
+          role: headChef.role
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Get head chef organization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get head chef organization',
+        code: 'INTERNAL_ERROR'
+      });
     }
   },
 };

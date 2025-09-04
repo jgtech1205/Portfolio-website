@@ -24,6 +24,7 @@ router.post(
     body('headChefId').isMongoId(),
     body('firstName').trim().isLength({ min: 1 }),
     body('lastName').trim().isLength({ min: 1 }),
+    body('organization').optional().trim().isLength({ min: 1 }),
   ],
   userController.requestChefAccess,
 )

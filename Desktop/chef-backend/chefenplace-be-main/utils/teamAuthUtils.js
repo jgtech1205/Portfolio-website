@@ -174,7 +174,7 @@ const validateTeamMemberCredentialsAdvanced = async (headChefId, username, passw
 
     // Input validation
     if (!headChefId || !username || !password) {
-      console.log("validateTeamMemberCredentialsAdvanced: Missing required parameters")
+      // console.log("validateTeamMemberCredentialsAdvanced: Missing required parameters")
       return null
     }
 
@@ -200,7 +200,7 @@ const validateTeamMemberCredentialsAdvanced = async (headChefId, username, passw
     const teamMembers = await User.find(query).select("firstName lastName email name role permissions avatar status headChefId organization")
 
     if (!teamMembers || teamMembers.length === 0) {
-      console.log(`validateTeamMemberCredentialsAdvanced: No team members found for headChefId: ${headChefId}`)
+      // console.log(`validateTeamMemberCredentialsAdvanced: No team members found for headChefId: ${headChefId}`)
       return null
     }
 
@@ -213,7 +213,7 @@ const validateTeamMemberCredentialsAdvanced = async (headChefId, username, passw
     })
 
     if (exactMatches.length === 0) {
-      console.log(`validateTeamMemberCredentialsAdvanced: No exact matches found`)
+      // console.log(`validateTeamMemberCredentialsAdvanced: No exact matches found`)
       return null
     }
 
@@ -234,7 +234,7 @@ const validateTeamMemberCredentialsAdvanced = async (headChefId, username, passw
         return new Date(b.updatedAt) - new Date(a.updatedAt)
       })
       
-      console.log(`validateTeamMemberCredentialsAdvanced: Returning most recent match for duplicate names: ${sortedMatches[0]._id}`)
+      // console.log(`validateTeamMemberCredentialsAdvanced: Returning most recent match for duplicate names: ${sortedMatches[0]._id}`)
       return sortedMatches[0]
     }
 

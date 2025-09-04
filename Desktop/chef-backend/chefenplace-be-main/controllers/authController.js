@@ -400,6 +400,18 @@ const authController = {
 
       console.log('✅ Restaurant validated:', headChef.email);
 
+      // Get restaurant information
+      const restaurant = await Restaurant.findOne({ headChefId: headChefId });
+      if (!restaurant) {
+        console.log('❌ Restaurant data not found');
+        return res.status(404).json({
+          message: "Restaurant data not found",
+          code: "RESTAURANT_DATA_NOT_FOUND"
+        })
+      }
+
+      console.log('✅ Restaurant data found:', restaurant.restaurantName);
+
       // Step 2: Find team member with restaurant-specific validation
       console.log('🔍 Searching for team member:', { headChefId, username, password });
       const teamMember = await User.findOne({
@@ -466,9 +478,12 @@ const authController = {
           headChefId: teamMember.headChefId,
           permissions: teamMember.permissions,
           status: teamMember.status,
+          restaurantName: restaurant.restaurantName,
+          organization: restaurant.restaurantName,
           restaurant: {
-            id: headChef._id,
-            name: headChef.name || `${headChef.firstName} ${headChef.lastName}`.trim()
+            id: restaurant._id,
+            name: restaurant.restaurantName,
+            type: restaurant.restaurantType
           }
         },
         accessToken,
@@ -581,6 +596,7 @@ const authController = {
         name: `${request.firstName} ${request.lastName}`,
         role: 'team-member',
         headChefId: req.user._id,
+        organization: request.organization || req.user.organization || 'Default Organization',
         status: 'approved'
         // Don't set permissions here - let the pre-save hook handle it
       });

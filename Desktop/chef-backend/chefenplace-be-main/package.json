@@ -9,7 +9,6 @@
     "test": "jest --passWithNoTests",
     "deploy": "./scripts/deploy.sh",
     "vercel-build": "npm install",
-
     "migrate:backup": "node scripts/backupUsers.js backup",
     "migrate:dry-run": "node scripts/migrateUsers.js dry-run",
     "migrate:run": "node scripts/migrateUsers.js migrate",
@@ -35,12 +34,12 @@
     "mongoose": "^7.5.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
     "openai": "^5.9.0",
     "sharp": "^0.34.3",
     "stripe": "^18.4.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
-    "node-fetch": "^2.6.7"
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "jest": "^29.6.4",

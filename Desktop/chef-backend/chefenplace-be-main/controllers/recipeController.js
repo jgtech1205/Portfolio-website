@@ -240,6 +240,15 @@ const recipeController = {
   // Update recipe
   async updateRecipe(req, res) {
     try {
+      // Check for validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
       const recipe = await Recipe.findById(req.params.id);
       if (!recipe || !recipe.isActive) {
         return res.status(404).json({ message: 'Recipe not found' });
@@ -248,8 +257,8 @@ const recipeController = {
       const {
         title,
         panel,
-        ingredients,
         method,
+        chefNotes,
         prepTime,
         cookTime,
         servings,
@@ -272,46 +281,99 @@ const recipeController = {
         };
       }
 
-      // Parse ingredients if it's a string
-      let parsedIngredients = ingredients;
-      if (typeof ingredients === 'string') {
-        try {
-          parsedIngredients = JSON.parse(ingredients);
-        } catch (e) {
-          parsedIngredients = ingredients
-            .split('\n')
-            .map((ing) => ({ name: ing.trim() }));
+      // Parse ingredients from multipart form data format: ingredients[0][name], ingredients[1][name], etc.
+      let parsedIngredients = [];
+      const ingredientKeys = Object.keys(req.body).filter(key => key.startsWith('ingredients['));
+      
+      // Debug logging for FormData parsing
+      console.log('FormData received:', {
+        body: req.body,
+        ingredientKeys: ingredientKeys,
+        hasFile: !!req.file
+      });
+      
+      if (ingredientKeys.length > 0) {
+        // Extract ingredients from multipart format
+        ingredientKeys.forEach(key => {
+          const match = key.match(/ingredients\[(\d+)\]\[name\]/);
+          if (match) {
+            const index = parseInt(match[1]);
+            const ingredientName = req.body[key];
+            if (ingredientName && ingredientName.trim()) {
+              parsedIngredients[index] = { name: ingredientName.trim() };
+            }
+          }
+        });
+        // Remove any undefined slots and ensure proper array
+        parsedIngredients = parsedIngredients.filter(ing => ing && ing.name);
+        console.log('Parsed ingredients from multipart:', parsedIngredients);
+      } else if (req.body.ingredients) {
+        // Fallback: handle if ingredients is sent as JSON string or array
+        if (typeof req.body.ingredients === 'string') {
+          try {
+            parsedIngredients = JSON.parse(req.body.ingredients);
+          } catch (e) {
+            parsedIngredients = req.body.ingredients
+              .split('\n')
+              .filter(ing => ing.trim())
+              .map((ing) => ({ name: ing.trim() }));
+          }
+        } else if (Array.isArray(req.body.ingredients)) {
+          parsedIngredients = req.body.ingredients;
         }
       }
 
-      recipe.title = title || recipe.title;
-      recipe.panel = panel || recipe.panel;
-      recipe.image = imageData;
-      recipe.ingredients = parsedIngredients || recipe.ingredients;
-      recipe.method = method || recipe.method;
-      recipe.prepTime = prepTime ? Number.parseInt(prepTime) : recipe.prepTime;
-      recipe.cookTime = cookTime ? Number.parseInt(cookTime) : recipe.cookTime;
-      recipe.servings = servings ? Number.parseInt(servings) : recipe.servings;
-      recipe.difficulty = difficulty || recipe.difficulty;
-      recipe.tags = tags
-        ? Array.isArray(tags)
-          ? tags
-          : tags.split(',').map((t) => t.trim())
-        : recipe.tags;
+      // Update only provided fields
+      if (title !== undefined) recipe.title = title;
+      if (panel !== undefined) recipe.panel = panel;
+      if (method !== undefined) recipe.method = method;
+      if (chefNotes !== undefined) recipe.chefNotes = chefNotes;
+      if (parsedIngredients.length > 0) recipe.ingredients = parsedIngredients;
+      if (imageData !== undefined) recipe.image = imageData;
+      if (prepTime !== undefined) recipe.prepTime = prepTime ? Number.parseInt(prepTime) : 0;
+      if (cookTime !== undefined) recipe.cookTime = cookTime ? Number.parseInt(cookTime) : 0;
+      if (servings !== undefined) recipe.servings = servings ? Number.parseInt(servings) : 1;
+      if (difficulty !== undefined) recipe.difficulty = difficulty;
+      if (tags !== undefined) {
+        recipe.tags = tags
+          ? Array.isArray(tags)
+            ? tags
+            : tags.split(',').map((t) => t.trim())
+          : [];
+      }
       recipe.updatedBy = req.user.id;
       recipe.version += 1;
 
       await recipe.save();
-      await recipe.populate(['panel createdBy updatedBy', 'name']);
+      await recipe.populate(['panel', 'createdBy', 'updatedBy']);
 
+      // Return the updated recipe object matching the Recipe interface
       res.json({
-        success: true,
-        message: 'Recipe updated successfully',
-        data: recipe,
+        id: recipe._id.toString(),
+        title: recipe.title,
+        panel: recipe.panel._id.toString(),
+        method: recipe.method,
+        chefNotes: recipe.chefNotes,
+        ingredients: recipe.ingredients,
+        image: recipe.image,
+        prepTime: recipe.prepTime,
+        cookTime: recipe.cookTime,
+        servings: recipe.servings,
+        difficulty: recipe.difficulty,
+        tags: recipe.tags,
+        isActive: recipe.isActive,
+        createdBy: recipe.createdBy._id.toString(),
+        updatedBy: recipe.updatedBy ? recipe.updatedBy._id.toString() : null,
+        version: recipe.version,
+        createdAt: recipe.createdAt,
+        updatedAt: recipe.updatedAt
       });
     } catch (error) {
       console.error('Update recipe error:', error);
-      res.status(500).json({ message: 'Server error' });
+      res.status(500).json({ 
+        message: 'Server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
