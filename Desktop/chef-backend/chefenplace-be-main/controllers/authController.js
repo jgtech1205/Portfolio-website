@@ -143,6 +143,8 @@ const authController = {
       }
 
       // Create new user with role "head-chef" - permissions will be set by pre-save hook
+      console.log('🔍 Creating new head chef user:', { email: finalEmail, name: finalName });
+      
       const user = new User({
         email: finalEmail,
         password: finalPassword, // Will be hashed by pre-save hook
@@ -154,11 +156,25 @@ const authController = {
         // Don't set permissions here - let the pre-save hook handle it
       })
 
-      await user.save()
+      console.log('💾 Saving user to database...');
+      try {
+        await user.save()
+        console.log('✅ User saved successfully with ID:', user._id);
+      } catch (saveError) {
+        console.error('❌ Error saving user to database:', saveError);
+        throw saveError;
+      }
 
       // Now set headChefId to the user's own _id
-      user.headChefId = user._id
-      await user.save()
+      console.log('🔗 Setting headChefId to user ID...');
+      try {
+        user.headChefId = user._id
+        await user.save()
+        console.log('✅ HeadChefId set successfully');
+      } catch (headChefIdError) {
+        console.error('❌ Error setting headChefId:', headChefIdError);
+        throw headChefIdError;
+      }
 
       // Create restaurant record if restaurant information is provided
       let restaurant = null
