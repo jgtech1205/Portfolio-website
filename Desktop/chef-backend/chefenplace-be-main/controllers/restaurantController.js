@@ -86,14 +86,12 @@ const restaurantController = {
         })
       }
 
-      // Hash password
-      const salt = await bcrypt.genSalt(12)
-      const hashedPassword = await bcrypt.hash(headChefPassword, salt)
+      // Password will be hashed by User model pre-save hook
 
       // Create head chef user
       const headChef = new User({
         email: headChefEmail,
-        password: hashedPassword,
+        password: headChefPassword,
         firstName: headChefName,
         lastName: "Head Chef",
         role: "head-chef",
@@ -254,19 +252,15 @@ const restaurantController = {
       
       let headChef, restaurant;
       try {
-        // Hash password
-        const salt = await bcrypt.genSalt(12);
-        const hashedPassword = await bcrypt.hash(headChefPassword, salt);
-
         // Split headChefName into firstName and lastName
         const nameParts = headChefName.trim().split(' ');
         const firstName = nameParts[0] || headChefName;
         const lastName = nameParts.slice(1).join(' ') || 'Head Chef';
 
-        // Create head chef user
+        // Create head chef user (password will be hashed by pre-save hook)
         headChef = new User({
           email: headChefEmail,
-          password: hashedPassword,
+          password: headChefPassword,
           firstName: firstName,
           lastName: lastName,
           name: headChefName, // Keep the full name as well
@@ -581,14 +575,10 @@ const restaurantController = {
             billingCycle
           } = session.metadata;
 
-          // Hash password
-          const salt = await bcrypt.genSalt(12);
-          const hashedPassword = await bcrypt.hash(headChefPassword, salt);
-
-          // Create head chef user first (without headChefId)
+          // Create head chef user first (password will be hashed by pre-save hook)
           const headChef = new User({
             email: headChefEmail,
-            password: hashedPassword,
+            password: headChefPassword,
             firstName: headChefName,
             lastName: "Head Chef",
             role: "head-chef",
@@ -889,14 +879,10 @@ async function handleCheckoutSessionCompleted(session) {
       return
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(12)
-    const hashedPassword = await bcrypt.hash(headChefPassword, salt)
-
-    // Create head chef user
+    // Create head chef user (password will be hashed by pre-save hook)
     const headChef = new User({
       email: headChefEmail,
-      password: hashedPassword,
+      password: headChefPassword,
       firstName: headChefName,
       lastName: "Head Chef",
       role: "head-chef",
