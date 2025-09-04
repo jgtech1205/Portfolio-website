@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken")
 const User = require("../database/models/User")
+const { verifyTokenWithContext } = require("../utils/tokenUtils")
 
 const auth = async (req, res, next) => {
   try {
@@ -9,8 +10,13 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: "Access denied. No token provided." })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await User.findById(decoded.userId).select("-password")
+    // Use the new token verification system that handles different token types
+    const tokenContext = verifyTokenWithContext(token)
+    if (!tokenContext.valid) {
+      return res.status(401).json({ message: "Invalid token." })
+    }
+
+    const user = await User.findById(tokenContext.userId).select("-password")
 
     if (!user) {
       return res.status(401).json({ message: "Invalid token." })
@@ -40,8 +46,13 @@ const teamAuth = async (req, res, next) => {
       return res.status(401).json({ message: "Access denied. No token provided." })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await User.findById(decoded.userId).select("-password")
+    // Use the new token verification system that handles different token types
+    const tokenContext = verifyTokenWithContext(token)
+    if (!tokenContext.valid) {
+      return res.status(401).json({ message: "Invalid token." })
+    }
+
+    const user = await User.findById(tokenContext.userId).select("-password")
 
     if (!user) {
       return res.status(401).json({ message: "Invalid token." })
@@ -86,8 +97,13 @@ const organizationAuth = async (req, res, next) => {
       return res.status(401).json({ message: "Access denied. No token provided." })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await User.findById(decoded.userId).select("-password")
+    // Use the new token verification system that handles different token types
+    const tokenContext = verifyTokenWithContext(token)
+    if (!tokenContext.valid) {
+      return res.status(401).json({ message: "Invalid token." })
+    }
+
+    const user = await User.findById(tokenContext.userId).select("-password")
 
     if (!user) {
       return res.status(401).json({ message: "Invalid token." })
