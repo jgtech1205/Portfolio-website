@@ -3,6 +3,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'https://chef-frontend-psi.vercel.app',
+  'https://chef-frontend-eta.vercel.app',
   'https://chefenplace-psi.vercel.app',
   'https://chef-app-backend.vercel.app',
   'https://chef-app-be.vercel.app',
