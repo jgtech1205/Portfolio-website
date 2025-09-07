@@ -6,6 +6,7 @@ const allowedOrigins = [
   'https://chef-frontend-eta.vercel.app',
   'https://chefenplace-psi.vercel.app',
   'https://chef-app-backend.vercel.app',
+  'https://chef-app-backend-rho.vercel.app',
   'https://chef-app-be.vercel.app',
   'https://chef-app-backend-git-backend-main-jgtech1205s-projects.vercel.app',
   'https://chef-app-backend-rcdcbokxj-jgtech1205s-projects.vercel.app'
