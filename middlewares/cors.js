@@ -1,16 +1,43 @@
 // Manual CORS handling - completely custom implementation
 const allowedOrigins = [
+  // Local development
   'http://localhost:3000',
   'http://localhost:5173',
+  'http://localhost:3001',
+  
+  // Production frontend URLs
   'https://chef-frontend-psi.vercel.app',
   'https://chef-frontend-eta.vercel.app',
   'https://chefenplace-psi.vercel.app',
+  'https://chef-frontend.vercel.app',
+  'https://chef-en-place.vercel.app',
+  
+  // Production backend URLs
   'https://chef-app-backend.vercel.app',
   'https://chef-app-backend-rho.vercel.app',
   'https://chef-app-be.vercel.app',
+  'https://chef-backend.vercel.app',
+  
+  // Vercel preview URLs (for testing)
   'https://chef-app-backend-git-backend-main-jgtech1205s-projects.vercel.app',
   'https://chef-app-backend-rcdcbokxj-jgtech1205s-projects.vercel.app'
 ];
+
+// Function to check if origin is a valid Chef en Place domain
+const isValidChefDomain = (origin) => {
+  if (!origin) return false;
+  
+  // Check for Chef en Place related domains
+  const chefDomains = [
+    'chef-frontend',
+    'chef-app-backend', 
+    'chef-backend',
+    'chef-en-place',
+    'chefenplace'
+  ];
+  
+  return chefDomains.some(domain => origin.includes(domain)) && origin.includes('.vercel.app');
+};
 
 // Main CORS middleware function
 const corsMiddleware = (req, res, next) => {
@@ -25,8 +52,8 @@ const corsMiddleware = (req, res, next) => {
     return next();
   }
   
-  // Check if origin is allowed
-  const isAllowedOrigin = allowedOrigins.includes(origin);
+  // Check if origin is allowed (exact match or valid Chef domain)
+  const isAllowedOrigin = allowedOrigins.includes(origin) || isValidChefDomain(origin);
   
   if (!isAllowedOrigin) {
     console.log(`❌ CORS: Blocking origin: ${origin}`);
@@ -79,7 +106,7 @@ const stripeCorsHandler = (req, res, next) => {
     return next();
   }
   
-  const isAllowedOrigin = allowedOrigins.includes(origin);
+  const isAllowedOrigin = allowedOrigins.includes(origin) || isValidChefDomain(origin);
   
   if (!isAllowedOrigin) {
     console.log(`❌ Stripe CORS: Blocking origin: ${origin}`);
@@ -117,7 +144,7 @@ const globalOptionsHandler = (req, res, next) => {
     console.log(`🔄 Global OPTIONS handler: ${req.path} from origin: ${origin}`);
     
     // Set CORS headers for any OPTIONS request
-    if (origin && allowedOrigins.includes(origin)) {
+    if (origin && (allowedOrigins.includes(origin) || isValidChefDomain(origin))) {
       res.header('Access-Control-Allow-Origin', origin);
     }
     res.header('Access-Control-Allow-Credentials', 'true');
