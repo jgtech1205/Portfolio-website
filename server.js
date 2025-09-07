@@ -186,7 +186,7 @@ app.use((err, req, res, next) => {
       message: 'CORS policy violation',
       error: 'Origin not allowed',
       origin: req.headers.origin,
-      allowedOrigins: ['https://chef-frontend-psi.vercel.app', 'https://chefenplace-psi.vercel.app', 'https://chef-app-backend.vercel.app']
+      allowedOrigins: ['https://chef-frontend-psi.vercel.app', 'https://chefenplace-psi.vercel.app', 'https://chef-app-backend-rho.vercel.app']
     });
   }
   

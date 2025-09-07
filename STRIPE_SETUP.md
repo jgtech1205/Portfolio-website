@@ -165,7 +165,7 @@ Your webhook currently handles these events:
 
 ```bash
 # Test webhook endpoint
-curl -X POST https://chef-app-backend.vercel.app/api/stripe/webhook \
+curl -X POST https://chef-app-backend-rho.vercel.app/api/stripe/webhook \
   -H "Content-Type: application/json" \
   -H "Stripe-Signature: test" \
   -d '{"type":"test"}'
