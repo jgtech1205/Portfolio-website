@@ -13,7 +13,6 @@ const standardizeUserObject = (user) => {
     role: user.role,
     status: user.status,
     organization: user.organization,
-    restaurantName: user.restaurantName,
     permissions: user.permissions,
     avatar: user.avatar,
   }

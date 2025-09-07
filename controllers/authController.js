@@ -96,37 +96,13 @@ const authController = {
       const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for']
       clearFailedAttempts(ip)
 
-      // Get restaurant information for head chefs
-      let restaurantName = null
-      if (user.role === "head-chef") {
-        try {
-          const restaurant = await Restaurant.findOne({ headChefId: user._id })
-          if (restaurant) {
-            restaurantName = restaurant.restaurantName
-            console.log('✅ Restaurant found:', restaurantName)
-          } else {
-            console.log('⚠️ No restaurant found for head chef')
-          }
-        } catch (restaurantError) {
-          console.error('❌ Error fetching restaurant:', restaurantError)
-          // Don't fail login for this, just log the error
-        }
-      }
-
       // Generate tokens based on user role
       const { accessToken, refreshToken } = user.role === "head-chef" 
         ? generateHeadChefTokens(user._id)
         : generateTeamTokens(user._id, user.headChefId, user.role)
 
       console.log('✅ Login successful, tokens generated')
-      
-      // Create user object with restaurant name
-      const userWithRestaurant = {
-        ...user.toObject(),
-        restaurantName: restaurantName
-      }
-      
-      res.status(HTTP_STATUS.OK).json(authSuccessResponse(userWithRestaurant, accessToken, refreshToken))
+      res.status(HTTP_STATUS.OK).json(authSuccessResponse(user, accessToken, refreshToken))
     } catch (error) {
       console.error("❌ Login error:", error)
       handleAuthError(req, res, 'SYSTEM_ERROR', null, 'System error occurred')
@@ -144,32 +120,11 @@ const authController = {
           code: AUTH_ERROR_CODES.USER_NOT_FOUND
         })
       }
-
-      // Get restaurant information for head chefs
-      let restaurantName = null
-      if (user.role === "head-chef") {
-        try {
-          const restaurant = await Restaurant.findOne({ headChefId: user._id })
-          if (restaurant) {
-            restaurantName = restaurant.restaurantName
-          }
-        } catch (restaurantError) {
-          console.error('❌ Error fetching restaurant:', restaurantError)
-        }
-      }
-
       // Generate tokens based on user role
       const { accessToken, refreshToken } = user.role === "head-chef" 
         ? generateHeadChefTokens(user._id)
         : generateTeamTokens(user._id, user.headChefId, user.role)
-
-      // Create user object with restaurant name
-      const userWithRestaurant = {
-        ...user.toObject(),
-        restaurantName: restaurantName
-      }
-
-      res.status(HTTP_STATUS.OK).json(authSuccessResponse(userWithRestaurant, accessToken, refreshToken))
+      res.status(HTTP_STATUS.OK).json(authSuccessResponse(user, accessToken, refreshToken))
     } catch (error) {
       console.error("Login with chefId error:", error)
       res.status(500).json({ message: "Server error" })
@@ -292,8 +247,7 @@ const authController = {
           role: user.role,
           headChefId: user.headChefId,
           permissions: user.permissions,
-          status: user.status,
-          restaurantName: restaurant ? restaurant.restaurantName : null
+          status: user.status
         },
         accessToken,
         refreshToken
@@ -559,15 +513,28 @@ const authController = {
 
       console.log('✅ Tokens generated successfully');
       
-      // Create team member object with restaurant name for standardized response
-      const teamMemberWithRestaurant = {
-        ...teamMember.toObject(),
-        restaurantName: restaurant.restaurantName,
-        organization: restaurant.restaurantName
-      }
-
-      // Return team member data with tokens using standardized response
-      res.status(200).json(authSuccessResponse(teamMemberWithRestaurant, accessToken, refreshToken))
+      // Return team member data with tokens
+      res.status(200).json({
+        user: {
+          id: teamMember._id,
+          firstName: teamMember.firstName,
+          lastName: teamMember.lastName,
+          name: teamMember.name,
+          role: "team-member",
+          headChefId: teamMember.headChefId,
+          permissions: teamMember.permissions,
+          status: teamMember.status,
+          restaurantName: restaurant.restaurantName,
+          organization: restaurant.restaurantName,
+          restaurant: {
+            id: restaurant._id,
+            name: restaurant.restaurantName,
+            type: restaurant.restaurantType
+          }
+        },
+        accessToken,
+        refreshToken
+      })
 
     } catch (error) {
       console.error("❌ Team login error:", error)
@@ -798,46 +765,16 @@ const authController = {
         });
       }
 
-      // Get restaurant information for both head chefs and team members
-      let restaurantName = null
-      if (user.role === "head-chef") {
-        try {
-          const restaurant = await Restaurant.findOne({ headChefId: user._id })
-          if (restaurant) {
-            restaurantName = restaurant.restaurantName
-          }
-        } catch (restaurantError) {
-          console.error('❌ Error fetching restaurant:', restaurantError)
-        }
-      } else if (user.role === "team-member" || user.role === "user") {
-        // For team members, get restaurant info via their headChefId
-        try {
-          const restaurant = await Restaurant.findOne({ headChefId: user.headChefId })
-          if (restaurant) {
-            restaurantName = restaurant.restaurantName
-          }
-        } catch (restaurantError) {
-          console.error('❌ Error fetching restaurant for team member:', restaurantError)
-        }
-      }
-
-      // Create user object with restaurant name
-      const userWithRestaurant = {
-        ...user.toObject(),
-        restaurantName: restaurantName
-      }
-
       console.log('✅ Profile retrieved for user:', {
         id: user._id,
         email: user.email,
         role: user.role,
-        permissions: user.permissions,
-        restaurantName: restaurantName
+        permissions: user.permissions
       });
 
       res.status(200).json({
         success: true,
-        data: userWithRestaurant
+        data: user
       });
 
     } catch (error) {
