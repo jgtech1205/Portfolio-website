@@ -73,7 +73,7 @@ const registerValidation = [
  *       200:
  *         description: Successfully logged in
  */
-router.post("/login", loginValidation, authController.login)
+router.post("/login", loginRateLimiter, loginValidation, authController.login)
 
 router.post("/login/:headChefId/:chefId", loginRateLimiter, authController.loginWithChefId)
 
@@ -166,10 +166,10 @@ router.post("/login/:headChefId/:chefId", loginRateLimiter, authController.login
  *         description: Internal server error
  */
 // Team member login
-router.post("/team-login/:headChefId", authController.teamLogin)
+router.post("/team-login/:headChefId", teamLoginRateLimiter, authController.teamLogin)
 
 // Alias for frontend compatibility
-router.post("/login-team-member/:headChefId", authController.teamLogin)
+router.post("/login-team-member/:headChefId", teamLoginRateLimiter, authController.teamLogin)
 
 /**
  * @swagger
