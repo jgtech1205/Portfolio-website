@@ -47,7 +47,18 @@ const stripeCheckoutValidation = [
 // Validator middleware
 const validate = (req, res, next) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  if (!errors.isEmpty()) {
+    console.log("❌ Validation errors for Stripe checkout:", {
+      errors: errors.array(),
+      body: req.body,
+      path: req.path
+    });
+    return res.status(400).json({ 
+      message: "Validation failed",
+      errors: errors.array(),
+      receivedData: req.body
+    });
+  }
   next();
 };
 

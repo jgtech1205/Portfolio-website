@@ -10,12 +10,16 @@ const notificationController = {
       const userId = req.user._id
       
       // Use headChefId for proper organization isolation
+      // Head chefs: use headChefContext.headChefId (from headChefAuth middleware)
+      // Team members: use user.headChefId (from regular auth middleware)
       const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
       
-      console.log('🔍 Getting notifications for head chef:', {
+      console.log('🔍 Getting notifications for user:', {
         headChefId: headChefId,
         userRole: req.user?.role,
-        userId: userId
+        userId: userId,
+        hasTeamContext: !!req.teamContext,
+        hasHeadChefContext: !!req.headChefContext
       });
 
       const baseMatch = {
@@ -117,6 +121,8 @@ const notificationController = {
   async getUnreadCount(req, res) {
     try {
       // Use headChefId for proper organization isolation
+      // Head chefs: use headChefContext.headChefId (from headChefAuth middleware)
+      // Team members: use user.headChefId (from regular auth middleware)
       const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
       
       const count = await Notification.countDocuments({
@@ -140,6 +146,8 @@ const notificationController = {
   async markAsRead(req, res) {
     try {
       // Use headChefId for proper organization isolation
+      // Head chefs: use headChefContext.headChefId (from headChefAuth middleware)
+      // Team members: use user.headChefId (from regular auth middleware)
       const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
       
       const notification = await Notification.findOneAndUpdate(
@@ -175,6 +183,8 @@ const notificationController = {
   async markAllAsRead(req, res) {
     try {
       // Use headChefId for proper organization isolation
+      // Head chefs: use headChefContext.headChefId (from headChefAuth middleware)
+      // Team members: use user.headChefId (from regular auth middleware)
       const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
       
       await Notification.updateMany(
@@ -212,12 +222,16 @@ const notificationController = {
       const { title, message, recipients, type = "info", priority = "medium", scheduledFor } = req.body
 
       // Use headChefId for proper organization isolation
+      // Head chefs: use headChefContext.headChefId (from headChefAuth middleware)
+      // Team members: use user.headChefId (from regular auth middleware)
       const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
       
-      console.log('🔍 Creating notification for head chef:', {
+      console.log('🔍 Creating notification for user:', {
         headChefId: headChefId,
         userRole: req.user?.role,
-        senderId: req.user?.id
+        senderId: req.user?.id,
+        hasTeamContext: !!req.teamContext,
+        hasHeadChefContext: !!req.headChefContext
       });
 
       // Validate recipients (only team members from this headchef)

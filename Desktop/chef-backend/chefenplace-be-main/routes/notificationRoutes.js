@@ -3,6 +3,7 @@ const { body, validationResult } = require("express-validator");
 const notificationController = require("../controllers/notificationController");
 const { auth } = require("../middlewares/auth");
 const { headChefAuth } = require("../middlewares/headChefAuth");
+const { teamMemberAuth } = require("../middlewares/teamAuth");
 const checkPermission = require("../middlewares/checkPermission");
 const { checkReadOnlyPermission } = require("../middlewares/readOnlyAuth");
 const { ensureConnection } = require("../database/connection");
@@ -41,6 +42,7 @@ const validate = (req, res, next) => {
  */
 router.get(
   "/",
+  auth,
   checkReadOnlyPermission("canViewNotifications"),
   notificationController.getUserNotifications
 );
@@ -57,6 +59,7 @@ router.get(
  */
 router.get(
   "/unread-count",
+  auth,
   checkReadOnlyPermission("canViewNotifications"),
   notificationController.getUnreadCount
 );
@@ -79,6 +82,7 @@ router.get(
  */
 router.put(
   "/:id/read",
+  auth,
   checkPermission("canUpdateNotifications"),
   notificationController.markAsRead
 );
@@ -95,6 +99,7 @@ router.put(
  */
 router.put(
   "/mark-all-read",
+  auth,
   checkPermission("canUpdateNotifications"),
   notificationController.markAllAsRead
 );

@@ -56,11 +56,11 @@ const ensureUserPermissions = (user) => {
         canDeletePlateups: false,
         canUpdatePlateups: false,
 
-        // Notification permissions - view only for team members
+        // Notification permissions - view and update for team members
         canViewNotifications: true,
         canCreateNotifications: false,
         canDeleteNotifications: false,
-        canUpdateNotifications: false,
+        canUpdateNotifications: true,
 
         // Panel permissions - view only for team members
         canViewPanels: true,
