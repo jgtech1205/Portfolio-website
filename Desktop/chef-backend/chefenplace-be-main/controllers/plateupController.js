@@ -20,7 +20,6 @@ const plateupController = {
             });
 
             const query = { 
-                isActive: true,
                 headChefId: headChefId // Filter by organization
             };
             
@@ -75,7 +74,7 @@ const plateupController = {
                 return res.status(400).json({ errors: errors.array() });
             }
 
-            const { name, folder } = req.body;
+            const { title, folder } = req.body;
             let imageData = null;
 
             // Handle image upload
@@ -87,10 +86,14 @@ const plateupController = {
                 };
             }
 
+            // Determine organization context (head chef)
+            const headChefId = req.headChefContext?.headChefId || req.user?.headChefId;
+
             const plateup = new Plateup({
-                name,
+                title,
                 folder,
                 image: imageData,
+                headChefId: headChefId,
                 createdBy: req.user._id,
             });
 
@@ -120,7 +123,7 @@ const plateupController = {
                 return res.status(404).json({ message: 'Plateup not found' });
             }
 
-            const { name, folder } = req.body;
+            const { title, folder } = req.body;
             let imageData = plateup.image;
 
             // Handle image upload
@@ -137,7 +140,7 @@ const plateupController = {
                 };
             }
 
-            plateup.name = name || plateup.name;
+            plateup.title = title || plateup.title;
             plateup.folder = folder !== undefined ? folder : plateup.folder;
             plateup.image = imageData;
             plateup.updatedBy = req.user._id;

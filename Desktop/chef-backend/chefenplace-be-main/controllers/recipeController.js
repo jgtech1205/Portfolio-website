@@ -412,16 +412,36 @@ const recipeController = {
         return res.status(400).json({ message: 'No image file provided' });
       }
 
-      // Compress image to reduce token usage, optimize for text readability
+      console.log('🔍 AI Scan - Processing image:', {
+        originalSize: req.file.size,
+        mimetype: req.file.mimetype,
+        filename: req.file.originalname
+      });
+
+      // Improved image processing for better text recognition
       const compressed = await sharp(req.file.buffer)
-        .resize({ width: 384 }) // Reduced width for smaller size
-        .grayscale() // Convert to grayscale for better OCR and smaller size
-        .jpeg({ quality: 60 }) // Lower quality, but still readable for text
-        .sharpen() // Slightly sharpen to enhance text edges
+        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true }) // Larger size for better text recognition
+        .jpeg({ quality: 85 }) // Higher quality for better text clarity
+        .sharpen({ sigma: 1.0, m1: 0.5, m2: 2.0 }) // Enhanced sharpening for text
+        .normalize() // Improve contrast
         .toBuffer();
 
       const base64Image = compressed.toString('base64');
-      const prompt = `Extract the recipe ingredients from this image, don't give any prefix like here are extracted ingredients etc just directly paste ingredients or items as bullet points. If the text in image is not recognizeable, just return the text is unclear`;
+      
+      // Improved prompt with better instructions
+      const prompt = `You are an expert at reading recipe ingredients from images. Extract ALL ingredients and items you can see in this image. 
+
+Instructions:
+- List each ingredient/item on a separate line with a bullet point (•)
+- Include quantities if visible (e.g., "• 2 cups flour", "• 1 tsp salt")
+- If you see any text that looks like ingredients, include it
+- Be thorough and include everything you can read
+- If the image is completely blank or has no readable text, say "No readable text found"
+- Do not say "unclear" unless the image is completely unreadable
+
+Extract the ingredients now:`;
+
+      console.log('🤖 Sending request to OpenAI with image size:', compressed.length, 'bytes');
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini-2024-07-18',
@@ -432,20 +452,29 @@ const recipeController = {
               { type: 'text', text: prompt },
               {
                 type: 'image_url',
-                image_url: { url: `data:image/jpeg;base64,${base64Image}` },
+                image_url: { 
+                  url: `data:image/jpeg;base64,${base64Image}`,
+                  detail: 'high' // Use high detail for better text recognition
+                },
               },
             ],
           },
         ],
-        max_tokens: 300,
+        max_tokens: 500, // Increased token limit
+        temperature: 0.1, // Lower temperature for more consistent results
       });
 
       const ingredients = completion.choices[0].message.content.trim();
+      
+      console.log('✅ AI Scan result:', ingredients.substring(0, 100) + '...');
 
       res.json({ success: true, data: { ingredients } });
     } catch (error) {
-      console.error('AI scan ingredients error:', error.message || error);
-      res.status(500).json({ message: 'Server error' });
+      console.error('❌ AI scan ingredients error:', error.message || error);
+      res.status(500).json({ 
+        message: 'Server error', 
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      });
     }
   },
 };

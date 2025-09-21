@@ -34,11 +34,11 @@ router.post(
   checkPermission("canCreatePlateups"),
   upload.single('image'),
   [
-    body('name')
+    body('title')
       .notEmpty()
-      .withMessage('Name is required')
+      .withMessage('Title is required')
       .isLength({ min: 2, max: 100 })
-      .withMessage('Name must be between 2 and 100 characters'),
+      .withMessage('Title must be between 2 and 100 characters'),
     body('folder')
       .optional()
       .isMongoId()
@@ -53,10 +53,10 @@ router.put(
   checkPermission("canUpdatePlateups"),
   upload.single('image'),
   [
-    body('name')
+    body('title')
       .optional()
       .isLength({ min: 2, max: 100 })
-      .withMessage('Name must be between 2 and 100 characters'),
+      .withMessage('Title must be between 2 and 100 characters'),
     body('folder')
       .optional()
       .isMongoId()

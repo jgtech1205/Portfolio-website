@@ -171,11 +171,14 @@ userSchema.pre("save", function (next) {
     isNew: this.isNew,
     role: this.role,
     hasPermissions: !!this.permissions,
-    canManageTeam: this.permissions?.canManageTeam
+    canManageTeam: this.permissions?.canManageTeam,
+    isModifiedRole: this.isModified("role"),
+    isModifiedPermissions: this.isModified("permissions"),
+    modifiedPaths: this.modifiedPaths()
   });
 
-  // Always set permissions for new users or when role is modified
-  if (this.isNew || this.isModified("role") || !this.permissions) {
+  // Only set permissions for new users or when role is modified, NOT when permissions are updated
+  if (this.isNew || this.isModified("role")) {
     console.log('   Setting permissions for role:', this.role);
     
     switch (this.role) {
@@ -214,7 +217,7 @@ userSchema.pre("save", function (next) {
         
       case "team-member":
       case "user":
-        // Set default permissions for team members
+        // Set default permissions for team members (no admin access)
         this.permissions = {
           // Recipe permissions - view only for team members
           canViewRecipes: true,

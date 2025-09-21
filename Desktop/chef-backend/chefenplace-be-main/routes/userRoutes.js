@@ -187,7 +187,55 @@ router.put(
  *       200:
  *         description: Team member removed
  */
-router.delete("/team/:id", checkPermission("canManageTeam"), userController.removeTeamMember)
+router.delete("/team/:id", headChefAuth, checkPermission("canManageTeam"), userController.removeTeamMember)
+
+// Reset team member permissions to default
+/**
+ * @swagger
+ * /api/users/team/{id}/reset-permissions:
+ *   post:
+ *     summary: Reset team member permissions to default
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Team member ID
+ *     responses:
+ *       200:
+ *         description: Team member permissions reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userId:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     permissions:
+ *                       type: object
+ *       403:
+ *         description: Only head chefs can reset permissions
+ *       404:
+ *         description: Team member not found
+ *       400:
+ *         description: User is not a team member
+ *       500:
+ *         description: Server error
+ */
+router.post("/team/:id/reset-permissions", headChefAuth, checkPermission("canManageTeam"), userController.resetTeamMemberPermissions)
 
 // Generate invite link for chefs
 router.get("/invite-link", checkPermission("canManageTeam"), userController.generateInviteLink)

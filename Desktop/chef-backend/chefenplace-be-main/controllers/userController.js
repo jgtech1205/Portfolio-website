@@ -5,6 +5,7 @@ const Notification = require('../database/models/Notification');
 const { uploadImage, deleteImage } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { ensureUserPermissions } = require('../utils/permissionUtils');
 
 const userController = {
   // Get user profile
@@ -286,12 +287,63 @@ const userController = {
       if (role) user.role = role;
       if (typeof isActive === 'boolean') user.isActive = isActive;
 
+      // Capture existing permissions to detect admin removal
+      const existingPermissions = { ...(user.permissions || {}) };
+
       if (permissions) {
-        user.permissions = { ...user.permissions, ...permissions };
+        const mergedPermissions = { ...existingPermissions, ...permissions };
+
+        // Determine if admin capabilities are being removed in this update
+        const hadAdmin = existingPermissions.canAccessAdmin === true || existingPermissions.canManageTeam === true;
+        const hasAdminAfter = mergedPermissions.canAccessAdmin === true || mergedPermissions.canManageTeam === true;
+
+        // If this is a team member and admin is being removed, reset to baseline team-member permissions
+        if ((user.role === 'user' || user.role === 'team-member') && hadAdmin && !hasAdminAfter) {
+          // Apply baseline team-member permissions atomically
+          user.permissions = {};
+          ensureUserPermissions(user);
+          console.log('🔄 Auto-reset to team-member baseline after admin removal', {
+            userId: user._id,
+            role: user.role,
+            permissions: user.permissions
+          });
+        } else {
+          user.permissions = mergedPermissions;
+        }
       }
 
       if (status) user.status = status;
-      await user.save();
+      
+      // Use findByIdAndUpdate to bypass pre-save hook when only updating permissions
+      if (permissions && !role) {
+        // Only updating permissions, not role - bypass pre-save hook
+        const updatedUser = await User.findByIdAndUpdate(
+          req.params.id,
+          { 
+            permissions: user.permissions,
+            ...(status && { status })
+          },
+          { new: true }
+        );
+        
+        res.json({
+          success: true,
+          message: 'Team member updated successfully',
+          data: {
+            id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            isActive: updatedUser.isActive,
+            status: updatedUser.status,
+            permissions: updatedUser.permissions,
+          },
+        });
+        return;
+      } else {
+        // Role is being changed or other fields - use save() to trigger pre-save hook
+        await user.save();
+      }
 
       res.json({
         success: true,
@@ -303,6 +355,7 @@ const userController = {
           role: user.role,
           isActive: user.isActive,
           status: user.status,
+          permissions: user.permissions, // Include updated permissions
         },
       });
     } catch (error) {
@@ -314,23 +367,93 @@ const userController = {
   // Remove team member
   async removeTeamMember(req, res) {
     try {
-      const user = await User.findById(req.params.id);
+      console.log('🔍 Remove team member request:', {
+        userId: req.params.id,
+        headChefId: req.user.headChefId,
+        userRole: req.user.role,
+        userPermissions: req.user.permissions
+      });
 
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+      // Validate that the requesting user is a head chef
+      if (req.user.role !== 'head-chef') {
+        console.log('❌ Only head chefs can remove team members');
+        return res.status(403).json({ 
+          message: 'Only head chefs can remove team members',
+          code: 'FORBIDDEN'
+        });
       }
 
-      // Soft delete - deactivate user
-      user.isActive = false;
-      await user.save();
+      // Find the user to be deleted
+      const userToDelete = await User.findById(req.params.id);
+
+      if (!userToDelete) {
+        console.log('❌ User not found:', req.params.id);
+        return res.status(404).json({ 
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
+
+      // Note: We can delete both active and inactive users permanently
+
+      // Security check: Ensure the user being deleted belongs to this head chef's organization
+      if (userToDelete.headChefId.toString() !== req.user._id.toString()) {
+        console.log('❌ User does not belong to this organization:', {
+          userHeadChefId: userToDelete.headChefId,
+          requestingHeadChefId: req.user._id
+        });
+        return res.status(403).json({ 
+          message: 'You can only remove team members from your own organization',
+          code: 'ORGANIZATION_MISMATCH'
+        });
+      }
+
+      // Prevent head chefs from deleting themselves
+      if (userToDelete.role === 'head-chef') {
+        console.log('❌ Cannot delete head chef:', req.params.id);
+        return res.status(400).json({ 
+          message: 'Cannot delete head chef accounts',
+          code: 'CANNOT_DELETE_HEAD_CHEF'
+        });
+      }
+
+      // Ensure we're only deleting team members
+      if (userToDelete.role !== 'user' && userToDelete.role !== 'team-member') {
+        console.log('❌ Can only delete team members:', userToDelete.role);
+        return res.status(400).json({ 
+          message: 'Can only delete team members',
+          code: 'INVALID_USER_ROLE'
+        });
+      }
+
+      console.log('✅ Proceeding with team member deletion:', {
+        userId: userToDelete._id,
+        name: userToDelete.name,
+        role: userToDelete.role,
+        headChefId: userToDelete.headChefId
+      });
+
+      // Hard delete - permanently remove from database
+      await User.findByIdAndDelete(userToDelete._id);
+
+      console.log('✅ Team member permanently deleted from database:', userToDelete._id);
 
       res.json({
         success: true,
-        message: 'Team member removed successfully',
+        message: 'Team member permanently deleted',
+        data: {
+          userId: userToDelete._id,
+          name: userToDelete.name,
+          deleted: true
+        }
       });
     } catch (error) {
-      console.error('Remove team member error:', error);
-      res.status(500).json({ message: 'Server error' });
+      console.error('❌ Remove team member error:', error);
+      res.status(500).json({ 
+        message: 'Server error',
+        code: 'INTERNAL_ERROR',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
@@ -628,6 +751,139 @@ const userController = {
       res.status(500).json({
         success: false,
         message: 'Failed to get head chef organization',
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  },
+
+  // Reset team member to default permissions
+  async resetTeamMemberPermissions(req, res) {
+    try {
+      console.log('🔄 Resetting team member permissions:', {
+        userId: req.params.id,
+        headChefId: req.user.headChefId,
+        userRole: req.user.role,
+        userPermissions: req.user.permissions
+      });
+
+      // Validate that the requesting user is a head chef
+      if (req.user.role !== 'head-chef') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only head chefs can reset team member permissions',
+          code: 'INSUFFICIENT_PERMISSIONS'
+        });
+      }
+
+      // Find the team member
+      console.log('🔍 Searching for team member:', {
+        userId: req.params.id,
+        headChefId: req.user.headChefId,
+        currentUserRole: req.user.role
+      });
+
+      const teamMember = await User.findOne({
+        _id: req.params.id,
+        headChefId: req.user.headChefId
+      });
+
+      console.log('🔍 Team member found:', {
+        found: !!teamMember,
+        teamMemberId: teamMember?._id,
+        teamMemberEmail: teamMember?.email,
+        teamMemberHeadChefId: teamMember?.headChefId,
+        teamMemberRole: teamMember?.role
+      });
+
+      if (!teamMember) {
+        // Let's also check if the user exists at all
+        const anyUser = await User.findById(req.params.id);
+        console.log('🔍 User exists in database:', {
+          exists: !!anyUser,
+          userId: anyUser?._id,
+          email: anyUser?.email,
+          headChefId: anyUser?.headChefId,
+          role: anyUser?.role
+        });
+
+        return res.status(404).json({
+          success: false,
+          message: 'Team member not found in your organization',
+          code: 'USER_NOT_FOUND',
+          debug: {
+            searchedUserId: req.params.id,
+            searchedHeadChefId: req.user.headChefId,
+            userExists: !!anyUser,
+            userHeadChefId: anyUser?.headChefId
+          }
+        });
+      }
+
+      // Ensure they are a team member
+      if (teamMember.role !== 'user' && teamMember.role !== 'team-member') {
+        return res.status(400).json({
+          success: false,
+          message: 'User is not a team member',
+          code: 'INVALID_ROLE'
+        });
+      }
+
+      // Reset to default team member permissions
+      teamMember.permissions = {
+        // Recipe permissions - view only for team members
+        canViewRecipes: true,
+        canEditRecipes: false,
+        canDeleteRecipes: false,
+        canUpdateRecipes: false,
+
+        // Plateup permissions - view only for team members
+        canViewPlateups: true,
+        canCreatePlateups: false,
+        canDeletePlateups: false,
+        canUpdatePlateups: false,
+
+        // Notification permissions - view and update for team members
+        canViewNotifications: true,
+        canCreateNotifications: false,
+        canDeleteNotifications: false,
+        canUpdateNotifications: true,
+
+        // Panel permissions - view only for team members
+        canViewPanels: true,
+        canCreatePanels: false,
+        canDeletePanels: false,
+        canUpdatePanels: false,
+
+        // Other permissions - no admin access for team members
+        canManageTeam: false,
+        canAccessAdmin: false,
+      };
+
+      await teamMember.save();
+
+      console.log('✅ Team member permissions reset successfully:', {
+        userId: teamMember._id,
+        email: teamMember.email,
+        role: teamMember.role,
+        permissions: teamMember.permissions
+      });
+
+      res.json({
+        success: true,
+        message: 'Team member permissions reset to default',
+        data: {
+          userId: teamMember._id,
+          email: teamMember.email,
+          role: teamMember.role,
+          permissions: teamMember.permissions
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Reset team member permissions error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reset team member permissions',
         code: 'INTERNAL_ERROR'
       });
     }

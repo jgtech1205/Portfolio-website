@@ -1,4 +1,5 @@
 const User = require("../database/models/User")
+const { ensureUserPermissions } = require("../utils/permissionUtils")
 const Panel = require("../database/models/Panel")
 const Recipe = require("../database/models/Recipe")
 const Notification = require("../database/models/Notification")
@@ -144,11 +145,57 @@ const adminController = {
 
       if (role) user.role = role
       if (typeof isActive === "boolean") user.isActive = isActive
+
       if (permissions) {
-        user.permissions = { ...user.permissions, ...permissions }
+        const existingPermissions = { ...(user.permissions || {}) }
+        const mergedPermissions = { ...existingPermissions, ...permissions }
+
+        const hadAdmin = existingPermissions.canAccessAdmin === true || existingPermissions.canManageTeam === true
+        const hasAdminAfter = mergedPermissions.canAccessAdmin === true || mergedPermissions.canManageTeam === true
+
+        // If admin is being removed for a non-head-chef, reset to baseline team-member permissions
+        if ((user.role === 'user' || user.role === 'team-member') && hadAdmin && !hasAdminAfter) {
+          user.permissions = {}
+          ensureUserPermissions(user)
+          console.log('🔄 Admin removed by admin panel. Reset to team-member baseline', {
+            userId: user._id,
+            role: user.role,
+            permissions: user.permissions
+          })
+        } else {
+          user.permissions = mergedPermissions
+        }
       }
 
-      await user.save()
+      // Use findByIdAndUpdate to bypass pre-save hook when only updating permissions
+      if (permissions && !role) {
+        // Only updating permissions, not role - bypass pre-save hook
+        const updatedUser = await User.findByIdAndUpdate(
+          req.params.id,
+          { 
+            permissions: user.permissions,
+            ...(typeof isActive === "boolean" && { isActive })
+          },
+          { new: true }
+        );
+        
+        res.json({
+          success: true,
+          message: "User updated successfully",
+          data: {
+            id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            isActive: updatedUser.isActive,
+            permissions: updatedUser.permissions,
+          },
+        });
+        return;
+      } else {
+        // Role is being changed or other fields - use save() to trigger pre-save hook
+        await user.save()
+      }
 
       res.json({
         success: true,

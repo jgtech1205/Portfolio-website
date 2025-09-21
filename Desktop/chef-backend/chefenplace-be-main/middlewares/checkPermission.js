@@ -4,6 +4,11 @@ const checkPermission = (permission) => {
       return res.status(401).json({ message: "Authentication required" })
     }
 
+    // Bypass for head chefs and admins
+    if (req.user.role === "head-chef" || req.user.permissions?.canAccessAdmin) {
+      return next()
+    }
+
     if (!req.user.permissions[permission]) {
       return res.status(403).json({
         message: "Access denied. Insufficient permissions.",
