@@ -18,7 +18,7 @@ export default function Hero() {
               Full-Stack Engineer & Problem Solver
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
-              I bring a hard hat mentality to the codebase — tackling challenges head-on, solving problems honestly, and building solutions that last. Passionate about clean code, seamless user experiences, and bringing ideas to life through technology.
+              I bring a hard hat mentality to the codebase tackling challenges head-on, solving problems honestly, and building solutions that last. Passionate about clean code, seamless user experiences, and bringing ideas to life through technology.
             </p>
             <p className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-8">
               Scalable Projects, Handcrafted — the SPH way.

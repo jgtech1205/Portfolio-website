@@ -8,7 +8,7 @@ export default function Projects() {
       image: "/api/placeholder/600/400",
       technologies: ["React", "Next.js", "TMDB API", "Tailwind CSS", "Responsive Design"],
       liveUrl: "https://movie-studio-vosl.vercel.app/",
-      githubUrl: "https://github.com/yourusername/movie-studio",
+      githubUrl: "https://github.com/jgtech1205/Movie_Studio",
       featured: true,
     },
     {
@@ -26,16 +26,7 @@ export default function Projects() {
       image: "/api/placeholder/600/400",
       technologies: ["AI Integration", "React", "Content Management", "Natural Language Processing"],
       liveUrl: "https://ai-outliner.vercel.app/",
-      githubUrl: "https://github.com/yourusername/ai-outliner",
-      featured: true,
-    },
-    {
-      title: "Instant App Builder Agency Site",
-      description: "A professional website developed for a development agency specializing in rapid application solutions. Features modern design, service showcases, and optimized user experience for client acquisition.",
-      image: "/api/placeholder/600/400",
-      technologies: ["React", "Agency Website", "Professional Design", "Client Work"],
-      liveUrl: "https://www.instantappbuilder.com/",
-      githubUrl: "https://github.com/yourusername/instant-app-builder",
+      githubUrl: "https://github.com/jgtech1205/AIOutliner",
       featured: true,
     },
   ];

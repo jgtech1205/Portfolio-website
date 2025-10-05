@@ -49,7 +49,7 @@ export default function About() {
                       Software Engineer
                     </h4>
                     <p className="text-gray-600 dark:text-gray-400">
-                      Company Name • 2023 - Present
+                      Upwork Freelancer • 2024 - Present
                     </p>
                   </div>
                   <div className="border-l-4 border-gray-300 dark:border-gray-600 pl-4">
@@ -57,7 +57,7 @@ export default function About() {
                       Junior Developer
                     </h4>
                     <p className="text-gray-600 dark:text-gray-400">
-                      Previous Company • 2022 - 2023
+                      Wifi Sports Network • 2022 - 2024
                     </p>
                   </div>
                 </div>
@@ -68,10 +68,10 @@ export default function About() {
                 </h3>
                 <div className="border-l-4 border-blue-600 pl-4">
                   <h4 className="font-medium text-gray-900 dark:text-white">
-                    Computer Science Degree
+                    Masters in Information Technology Management
                   </h4>
                   <p className="text-gray-600 dark:text-gray-400">
-                    University Name • 2018 - 2022
+                    Western Governors University • 2018 - 2022
                   </p>
                 </div>
               </div>
@@ -83,7 +83,7 @@ export default function About() {
             <h3 className="text-2xl font-semibold text-center text-gray-900 dark:text-white mb-8">
               Beyond Code
             </h3>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               <div className="group relative">
                 <div className="aspect-video rounded-xl overflow-hidden shadow-lg">
                   <Image
@@ -101,20 +101,6 @@ export default function About() {
               <div className="group relative">
                 <div className="aspect-video rounded-xl overflow-hidden shadow-lg">
                   <Image
-                    src="/images/family1.png"
-                    alt="Family time"
-                    width={600}
-                    height={400}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-                <p className="text-center text-gray-600 dark:text-gray-400 mt-3">
-                  Quality time with family
-                </p>
-              </div>
-              <div className="group relative">
-                <div className="aspect-video rounded-xl overflow-hidden shadow-lg">
-                  <Image
                     src="/images/family2.png"
                     alt="More family moments"
                     width={600}
@@ -123,7 +109,7 @@ export default function About() {
                   />
                 </div>
                 <p className="text-center text-gray-600 dark:text-gray-400 mt-3">
-                  More precious moments
+                  Quality time with family
                 </p>
               </div>
             </div>
